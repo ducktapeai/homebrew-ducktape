@@ -3,12 +3,12 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   
   # For local testing while the repository is private
-  url "file:///tmp/ducktape-0.1.1.tar.gz"
+  url "file:///tmp/ducktape-0.1.2.tar.gz"
   # Will use this URL when repository becomes public:
-  # url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.1.1.tar.gz"
+  # url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.1.2.tar.gz"
   
   # Calculate the SHA for the local archive
-  sha256 `shasum -a 256 /tmp/ducktape-0.1.1.tar.gz`.split.first
+  sha256 `shasum -a 256 /tmp/ducktape-0.1.2.tar.gz`.split.first
   license "MIT"
   
   # Repository is currently private - formula is for testing only
