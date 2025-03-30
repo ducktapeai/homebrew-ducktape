@@ -15,7 +15,8 @@ class DucktapeDev < Formula
   def install
     # Force a clean build to ensure proper versioning
     system "cargo", "clean"
-    system "cargo", "build", "--release", "--locked"
+    # Remove the --locked flag to allow Cargo to update the lock file if needed
+    system "cargo", "build", "--release"
     bin.install "target/release/ducktape"
   end
 
