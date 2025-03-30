@@ -4,16 +4,14 @@ class DucktapeDev < Formula
   version "0.1.5"
   license "MIT"
   
-  # For private development use, we use the head approach pointing to local repository
-  head do
-    url "file:///Users/shaunstuart/RustroverProjects/ducktape"
-  end
-
   depends_on "rust" => :build
 
   def install
-    system "cargo", "build", "--release", "--locked"
-    bin.install "target/release/ducktape"
+    # Build directly from the local repository path instead of using HEAD
+    cd "/Users/shaunstuart/RustroverProjects/ducktape" do
+      system "cargo", "build", "--release", "--locked"
+      bin.install "target/release/ducktape"
+    end
   end
 
   test do
