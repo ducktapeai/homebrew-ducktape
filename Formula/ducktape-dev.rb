@@ -4,13 +4,11 @@ class DucktapeDev < Formula
   version "0.1.5"
   license "MIT"
   
-  # For private development, we use a direct path to the repository
-  head do
-    url "file:///Users/shaunstuart/RustroverProjects/ducktape"
-  end
-  
-  # Also provide a standard URL as required by Homebrew
-  url "file:///Users/shaunstuart/RustroverProjects/ducktape", :using => :git
+  # For private development, use a direct path to the repository
+  # Specify main branch explicitly
+  url "file:///Users/shaunstuart/RustroverProjects/ducktape", 
+      :using => :git, 
+      :branch => "main"
   
   depends_on "rust" => :build
 
