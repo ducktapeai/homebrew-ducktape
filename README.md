@@ -27,7 +27,7 @@ For local development or private repository access:
 brew tap ducktapeai/ducktape
 
 # Install development version of Ducktape
-brew install --HEAD ducktapeai/ducktape/development/ducktape
+brew install --HEAD ducktapeai/ducktape/ducktape-dev
 ```
 
 ## Usage
