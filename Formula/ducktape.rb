@@ -6,11 +6,6 @@ class Ducktape < Formula
   sha256 "3af5b639e074c7475bc5f2bf471f99a4e157d2b33a85bd729046f617662c7e28"
   license "MIT"
   
-  # For local development
-  head do
-    url "file:///Users/shaunstuart/RustroverProjects/ducktape"
-  end
-
   depends_on "rust" => :build
 
   def install
