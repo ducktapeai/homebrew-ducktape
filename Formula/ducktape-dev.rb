@@ -12,7 +12,7 @@ class DucktapeDev < Formula
   
   depends_on "rust" => :build
 
-  def install
+  def   brew unlink ducktape-dev && brew link ducktapeinstall
     # Force a clean build to ensure proper versioning
     system "cargo", "clean"
     # Remove the --locked flag to allow Cargo to update the lock file if needed
