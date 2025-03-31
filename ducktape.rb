@@ -7,13 +7,32 @@ class Ducktape < Formula
   license "MIT"
   
   depends_on "rust" => :build
+  
+  # Additional dependencies can be added here as needed
+  # depends_on "openssl"
 
   def install
+    # Build with release optimizations
     system "cargo", "build", "--release"
+    
+    # Install the binary
     bin.install "target/release/ducktape"
+    
+    # Install bash completion if it exists
+    bash_completion.install "completions/ducktape.bash" if File.exist?("completions/ducktape.bash")
+    
+    # Install zsh completion if it exists
+    zsh_completion.install "completions/_ducktape" if File.exist?("completions/_ducktape")
+    
+    # Install fish completion if it exists
+    fish_completion.install "completions/ducktape.fish" if File.exist?("completions/ducktape.fish")
+    
+    # Install man page if it exists
+    man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
 
   test do
-    system "#{bin}/ducktape", "--version"
+    # Verify the installation by checking version output
+    assert_match /\d+\.\d+\.\d+/, shell_output("#{bin}/ducktape --version")
   end
 end
