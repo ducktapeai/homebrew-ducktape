@@ -29,6 +29,8 @@ function check_command() {
 
 check_command brew
 check_command git
+check_command grep
+check_command sed
 
 echo -e "${BLUE}Updating Ducktape Development Version...${NC}"
 
@@ -42,6 +44,31 @@ fi
 if [ ! -d "$REPO_PATH" ]; then
     echo -e "${RED}Error: Development repository not found at $REPO_PATH.${NC}"
     exit 1
+fi
+
+# Get the current version from Cargo.toml in the repository
+if [ -f "${REPO_PATH}/Cargo.toml" ]; then
+    CARGO_VERSION=$(grep -m 1 'version = ' "${REPO_PATH}/Cargo.toml" | sed 's/version = "//g' | sed 's/"//g')
+    echo -e "${BLUE}Current version in Cargo.toml: ${YELLOW}${CARGO_VERSION}${NC}"
+    
+    # Get the current version from the dev formula
+    FORMULA_VERSION=$(grep -m 1 'version "' "$FORMULA_PATH" | sed 's/version "//g' | sed 's/"//g')
+    echo -e "${BLUE}Current version in formula: ${YELLOW}${FORMULA_VERSION}${NC}"
+    
+    # Check if versions are different
+    if [ "$CARGO_VERSION" != "$FORMULA_VERSION" ]; then
+        echo -e "${YELLOW}Warning: Version mismatch between Cargo.toml (${CARGO_VERSION}) and formula (${FORMULA_VERSION}).${NC}"
+        read -p "Do you want to update the formula version to match Cargo.toml? (y/n): " UPDATE_VERSION
+        
+        if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
+            sed -i '' "s/version \"${FORMULA_VERSION}\"/version \"${CARGO_VERSION}\"/g" "$FORMULA_PATH"
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Error: Failed to update version in formula. Check file permissions.${NC}"
+                exit 1
+            fi
+            echo -e "${BLUE}Updated version in formula to: ${YELLOW}${CARGO_VERSION}${NC}"
+        fi
+    fi
 fi
 
 echo -e "${BLUE}Ensuring development repository is up to date...${NC}"
@@ -92,7 +119,7 @@ brew link ducktape-dev
 
 # Print version to confirm
 echo -e "${GREEN}Successfully updated to development version:${NC}"
-ducktape version
+ducktape version || ducktape --version  # Try both version command formats
 
 # Show development branch information
 CURRENT_BRANCH=$(cd "$REPO_PATH" && git branch --show-current)

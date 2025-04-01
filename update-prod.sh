@@ -26,16 +26,23 @@ function check_command() {
 check_command curl
 check_command shasum
 check_command brew
+check_command grep
+check_command sed
 
 echo -e "${BLUE}Updating Ducktape Production Version...${NC}"
 
-# 1. Get the current version from ducktape.rb
-if [ ! -f "ducktape.rb" ]; then
-    echo -e "${RED}Error: ducktape.rb file not found in current directory.${NC}"
+# Define formula paths
+MAIN_FORMULA="ducktape.rb"
+FORMULA_DIR_PATH="Formula/ducktape.rb"
+
+# Check if formulas exist
+if [[ ! -f "$MAIN_FORMULA" || ! -f "$FORMULA_DIR_PATH" ]]; then
+    echo -e "${RED}Error: Formula files not found. Please ensure you're in the homebrew-ducktape directory.${NC}"
     exit 1
 fi
 
-CURRENT_VERSION=$(grep -m 1 'version "' ducktape.rb | sed 's/version "//g' | sed 's/"//g')
+# 1. Get the current version from ducktape.rb
+CURRENT_VERSION=$(grep -m 1 'version "' "$MAIN_FORMULA" | sed 's/version "//g' | sed 's/"//g')
 echo -e "${BLUE}Current version in formula: ${YELLOW}${CURRENT_VERSION}${NC}"
 
 # Ask if user wants to update the version
@@ -50,45 +57,75 @@ if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
         exit 1
     fi
     
-    # Update version in the formula file
-    sed -i '' "s/version \"${CURRENT_VERSION}\"/version \"${NEW_VERSION}\"/g" ducktape.rb
-    
-    echo -e "${BLUE}Updated formula version to: ${YELLOW}${NEW_VERSION}${NC}"
+    # Update version in both formula files
+    for formula in "$MAIN_FORMULA" "$FORMULA_DIR_PATH"; do
+        sed -i '' "s/version \"${CURRENT_VERSION}\"/version \"${NEW_VERSION}\"/g" "$formula"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Failed to update version in $formula. Check file permissions.${NC}"
+            exit 1
+        fi
+        echo -e "${BLUE}Updated version in $formula to: ${YELLOW}${NEW_VERSION}${NC}"
+    done
     
     # Automatically calculate the SHA256 for the new version
     echo -e "${BLUE}Calculating SHA256 hash for release tarball v${NEW_VERSION}...${NC}"
     
-    # Download the tarball and calculate its SHA256 hash
+    # Define GitHub release URL and temp file
     TARBALL_URL="https://github.com/DuckTapeAI/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz"
+    TEMP_TARBALL="/tmp/ducktape-v${NEW_VERSION}.tar.gz"
+    
     echo -e "${BLUE}Downloading tarball from: ${YELLOW}${TARBALL_URL}${NC}"
     
-    # Try to download and calculate hash with timeout
-    NEW_SHA=""
-    if curl --output /dev/null --silent --head --fail --max-time 10 "${TARBALL_URL}"; then
-        NEW_SHA=$(curl -sL --max-time 30 "${TARBALL_URL}" | shasum -a 256 | cut -d ' ' -f 1)
-    fi
-    
-    if [ -z "$NEW_SHA" ]; then
-        echo -e "${RED}Error: Failed to calculate SHA256 hash. The release tarball may not exist yet.${NC}"
-        echo -e "${YELLOW}Please ensure you've created the release on GitHub before running this script.${NC}"
-        echo -e "${YELLOW}Or manually enter the SHA256 hash if you have it:${NC}"
-        read -p "Enter SHA256 hash (leave blank to abort): " MANUAL_SHA
+    # Try to download the tarball with proper error handling
+    if curl -L --fail --silent --show-error --max-time 30 -o "$TEMP_TARBALL" "$TARBALL_URL"; then
+        # Calculate SHA256 hash from downloaded file for added security
+        NEW_SHA=$(shasum -a 256 "$TEMP_TARBALL" | cut -d ' ' -f 1)
         
-        if [ -z "$MANUAL_SHA" ]; then
+        if [ -z "$NEW_SHA" ]; then
+            echo -e "${RED}Error: Failed to calculate SHA256 hash.${NC}"
+            exit 1
+        fi
+        
+        echo -e "${BLUE}Successfully downloaded tarball and calculated SHA256 hash.${NC}"
+        echo -e "${BLUE}SHA256: ${YELLOW}${NEW_SHA}${NC}"
+        
+        # Clean up temp file
+        rm -f "$TEMP_TARBALL"
+    else
+        echo -e "${RED}Error: Failed to download the release tarball.${NC}"
+        echo -e "${YELLOW}Please ensure you've created the v${NEW_VERSION} release on GitHub before running this script.${NC}"
+        
+        # Offer manual SHA input option
+        echo -e "${YELLOW}Would you like to enter the SHA256 hash manually? (y/n)${NC}"
+        read -p "> " MANUAL_SHA_OPTION
+        
+        if [[ $MANUAL_SHA_OPTION == "y" || $MANUAL_SHA_OPTION == "Y" ]]; then
+            read -p "Enter SHA256 hash: " MANUAL_SHA
+            
+            # Simple validation of SHA256 format
+            if ! [[ $MANUAL_SHA =~ ^[0-9a-f]{64}$ ]]; then
+                echo -e "${RED}Error: Invalid SHA256 hash format. It should be a 64-character hexadecimal string.${NC}"
+                exit 1
+            fi
+            
+            NEW_SHA="$MANUAL_SHA"
+        else
             echo -e "${RED}Aborting version update.${NC}"
             exit 1
-        else
-            NEW_SHA="$MANUAL_SHA"
         fi
     fi
     
-    echo -e "${BLUE}New SHA256 hash: ${YELLOW}${NEW_SHA}${NC}"
+    # Update SHA in both formula files
+    CURRENT_SHA=$(grep -m 1 'sha256 "' "$MAIN_FORMULA" | sed 's/sha256 "//g' | sed 's/"//g')
     
-    # Update SHA in the formula file
-    CURRENT_SHA=$(grep -m 1 'sha256 "' ducktape.rb | sed 's/sha256 "//g' | sed 's/"//g')
-    sed -i '' "s/sha256 \"${CURRENT_SHA}\"/sha256 \"${NEW_SHA}\"/g" ducktape.rb
-    
-    echo -e "${GREEN}Successfully updated SHA256 hash in formula.${NC}"
+    for formula in "$MAIN_FORMULA" "$FORMULA_DIR_PATH"; do
+        sed -i '' "s/sha256 \"${CURRENT_SHA}\"/sha256 \"${NEW_SHA}\"/g" "$formula"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Failed to update SHA256 hash in $formula. Check file permissions.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Successfully updated SHA256 hash in $formula.${NC}"
+    done
 fi
 
 # Backup current installation state
@@ -116,7 +153,7 @@ brew link ducktape
 
 # Print version to confirm
 echo -e "${GREEN}Successfully updated to production version:${NC}"
-ducktape --version
+ducktape version || ducktape --version  # Try both version command formats
 
 echo -e "${BLUE}Production version is now active.${NC}"
 echo -e "${BLUE}Run 'ducktape' to use the production build.${NC}"
@@ -130,7 +167,7 @@ fi
 # Remind about committing changes if version was updated
 if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
     echo -e "${YELLOW}Don't forget to commit and push the updated formula:${NC}"
-    echo -e "${YELLOW}git add Formula/ducktape.rb${NC}"
-    echo -e "${YELLOW}git commit -m \"Update to v${NEW_VERSION}\"${NC}"
+    echo -e "${YELLOW}git add ducktape.rb Formula/ducktape.rb${NC}"
+    echo -e "${YELLOW}git commit -m \"Update formulas to v${NEW_VERSION}\"${NC}"
     echo -e "${YELLOW}git push${NC}"
 fi
