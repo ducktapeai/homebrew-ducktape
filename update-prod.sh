@@ -71,7 +71,7 @@ if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
     echo -e "${BLUE}Calculating SHA256 hash for release tarball v${NEW_VERSION}...${NC}"
     
     # Define GitHub release URL and temp file
-    TARBALL_URL="https://github.com/DuckTapeAI/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz"
+    TARBALL_URL="https://github.com/ducktapeai/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz"
     TEMP_TARBALL="/tmp/ducktape-v${NEW_VERSION}.tar.gz"
     
     echo -e "${BLUE}Downloading tarball from: ${YELLOW}${TARBALL_URL}${NC}"
