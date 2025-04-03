@@ -7,6 +7,9 @@ class Ducktape < Formula
   license "MIT"
   
   depends_on "rust" => :build
+  
+  # Additional dependencies can be added here as needed
+  # depends_on "openssl"
 
   def install
     # Build with release optimizations

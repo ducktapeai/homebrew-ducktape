@@ -31,18 +31,17 @@ check_command sed
 
 echo -e "${BLUE}Updating Ducktape Production Version...${NC}"
 
-# Define formula paths
-MAIN_FORMULA="ducktape.rb"
-FORMULA_DIR_PATH="Formula/ducktape.rb"
+# Define formula path
+FORMULA_PATH="Formula/ducktape.rb"
 
-# Check if formulas exist
-if [[ ! -f "$MAIN_FORMULA" || ! -f "$FORMULA_DIR_PATH" ]]; then
-    echo -e "${RED}Error: Formula files not found. Please ensure you're in the homebrew-ducktape directory.${NC}"
+# Check if formula exists
+if [[ ! -f "$FORMULA_PATH" ]]; then
+    echo -e "${RED}Error: Formula file not found. Please ensure you're in the homebrew-ducktape directory.${NC}"
     exit 1
 fi
 
-# 1. Get the current version from ducktape.rb
-CURRENT_VERSION=$(grep -m 1 'version "' "$MAIN_FORMULA" | sed 's/version "//g' | sed 's/"//g')
+# 1. Get the current version from the formula
+CURRENT_VERSION=$(grep -m 1 'version "' "$FORMULA_PATH" | sed 's/version "//g' | sed 's/"//g')
 echo -e "${BLUE}Current version in formula: ${YELLOW}${CURRENT_VERSION}${NC}"
 
 # Ask if user wants to update the version
@@ -57,15 +56,13 @@ if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
         exit 1
     fi
     
-    # Update version in both formula files
-    for formula in "$MAIN_FORMULA" "$FORMULA_DIR_PATH"; do
-        sed -i '' "s/version \"${CURRENT_VERSION}\"/version \"${NEW_VERSION}\"/g" "$formula"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Error: Failed to update version in $formula. Check file permissions.${NC}"
-            exit 1
-        fi
-        echo -e "${BLUE}Updated version in $formula to: ${YELLOW}${NEW_VERSION}${NC}"
-    done
+    # Update version in the formula file
+    sed -i '' "s/version \"${CURRENT_VERSION}\"/version \"${NEW_VERSION}\"/g" "$FORMULA_PATH"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to update version in $FORMULA_PATH. Check file permissions.${NC}"
+        exit 1
+    fi
+    echo -e "${BLUE}Updated version in $FORMULA_PATH to: ${YELLOW}${NEW_VERSION}${NC}"
     
     # Automatically calculate the SHA256 for the new version
     echo -e "${BLUE}Calculating SHA256 hash for release tarball v${NEW_VERSION}...${NC}"
@@ -115,17 +112,15 @@ if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
         fi
     fi
     
-    # Update SHA in both formula files
-    CURRENT_SHA=$(grep -m 1 'sha256 "' "$MAIN_FORMULA" | sed 's/sha256 "//g' | sed 's/"//g')
+    # Update SHA in the formula file
+    CURRENT_SHA=$(grep -m 1 'sha256 "' "$FORMULA_PATH" | sed 's/sha256 "//g' | sed 's/"//g')
     
-    for formula in "$MAIN_FORMULA" "$FORMULA_DIR_PATH"; do
-        sed -i '' "s/sha256 \"${CURRENT_SHA}\"/sha256 \"${NEW_SHA}\"/g" "$formula"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Error: Failed to update SHA256 hash in $formula. Check file permissions.${NC}"
-            exit 1
-        fi
-        echo -e "${GREEN}Successfully updated SHA256 hash in $formula.${NC}"
-    done
+    sed -i '' "s/sha256 \"${CURRENT_SHA}\"/sha256 \"${NEW_SHA}\"/g" "$FORMULA_PATH"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to update SHA256 hash in $FORMULA_PATH. Check file permissions.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Successfully updated SHA256 hash in $FORMULA_PATH.${NC}"
 fi
 
 # Backup current installation state
@@ -167,7 +162,7 @@ fi
 # Remind about committing changes if version was updated
 if [[ $UPDATE_VERSION == "y" || $UPDATE_VERSION == "Y" ]]; then
     echo -e "${YELLOW}Don't forget to commit and push the updated formula:${NC}"
-    echo -e "${YELLOW}git add ducktape.rb Formula/ducktape.rb${NC}"
-    echo -e "${YELLOW}git commit -m \"Update formulas to v${NEW_VERSION}\"${NC}"
+    echo -e "${YELLOW}git add Formula/ducktape.rb${NC}"
+    echo -e "${YELLOW}git commit -m \"Update formula to v${NEW_VERSION}\"${NC}"
     echo -e "${YELLOW}git push${NC}"
 fi
