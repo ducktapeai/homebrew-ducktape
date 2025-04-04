@@ -40,35 +40,28 @@ class Ducktape < Formula
   desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
   homepage "https://github.com/ducktapeai/ducktape"
   version "${NEW_VERSION}"
-  url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v\#{version}.tar.gz"
+  url "${GITHUB_URL}"
   sha256 "${SHA256}"
   license "MIT"
-  
+
   depends_on "rust" => :build
 
   def install
-    # Build with release optimizations
     system "cargo", "build", "--release"
-    
-    # Install the binary
     bin.install "target/release/ducktape"
     
-    # Install bash completion if it exists
-    bash_completion.install "completions/ducktape.bash" if File.exist?("completions/ducktape.bash")
+    # Generate shell completions
+    output = Utils.safe_popen_read(bin/"ducktape", "completions")
+    (bash_completion/"ducktape").write output
+    (zsh_completion/"_ducktape").write output
+    (fish_completion/"ducktape.fish").write output
     
-    # Install zsh completion if it exists
-    zsh_completion.install "completions/_ducktape" if File.exist?("completions/_ducktape")
-    
-    # Install fish completion if it exists
-    fish_completion.install "completions/ducktape.fish" if File.exist?("completions/ducktape.fish")
-    
-    # Install man page if it exists
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
 
   test do
-    # Verify the installation by checking version output
-    assert_match /\\d+\\.\\d+\\.\\d+/, shell_output("\#{bin}/ducktape --version")
+    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
+    system "\#{bin}/ducktape", "calendar", "list"
   end
 end
 EOL
