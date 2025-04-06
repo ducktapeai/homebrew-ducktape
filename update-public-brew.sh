@@ -40,7 +40,7 @@ echo -e "${BLUE}Updating Ducktape formula...${NC}"
 CURRENT_VERSION=$(grep -m 1 'version "' Formula/ducktape.rb | sed 's/version "//g' | sed 's/"//g')
 echo -e "${BLUE}Current version in formula: ${YELLOW}${CURRENT_VERSION}${NC}"
 
-NEW_VERSION="0.11.0"
+NEW_VERSION="0.11.1"
 echo -e "${BLUE}Setting new version to: ${YELLOW}${NEW_VERSION}${NC}"
 
 # Calculate SHA256 for the GitHub tarball
