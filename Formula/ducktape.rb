@@ -1,16 +1,15 @@
 class Ducktape < Formula
   desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
   homepage "https://github.com/ducktapeai/ducktape"
-  version "0.10.0"
   url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.10.0.tar.gz"
-  sha256 "9e8fb487b7bb699d8363862ea7497ad712465426ab14965e0ceb9ba81dad4ff6"
+  version "0.10.0"
+  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
   license "MIT"
 
   depends_on "rust" => :build
 
   def install
-    system "cargo", "build", "--release"
-    bin.install "target/release/ducktape"
+    system "cargo", "install", "--root", prefix, "--path", "."
     
     # Generate shell completions
     output = Utils.safe_popen_read(bin/"ducktape", "completions")
@@ -22,7 +21,7 @@ class Ducktape < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/ducktape --version")
-    system "#{bin}/ducktape", "calendar", "list"
+    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
+    system "\#{bin}/ducktape", "calendar", "list"
   end
 end

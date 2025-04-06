@@ -2,53 +2,64 @@
 
 set -e
 
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
-    echo "Error: This script should not be run as root/sudo"
-    echo "Please run without sudo: ./update-public-brew.sh"
+    echo -e "${RED}Error: This script should not be run as root/sudo${NC}"
+    echo -e "Please run without sudo: ./update-public-brew.sh"
     exit 1
 fi
 
 # Ensure Homebrew environment is properly set
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-echo "Updating Ducktape Public Release Version..."
+# Uninstall any existing ducktape installations
+echo -e "${BLUE}Checking for existing ducktape installations...${NC}"
+
+# Check for public tap version
+if brew list ducktapeai/ducktape/ducktape &>/dev/null; then
+    echo -e "${YELLOW}Uninstalling public tap version...${NC}"
+    brew uninstall ducktapeai/ducktape/ducktape
+fi
+
+# Check for local formula version
+if brew list --formula | grep -q "^ducktape$"; then
+    echo -e "${YELLOW}Uninstalling local formula version...${NC}"
+    brew uninstall ducktape
+fi
+
+echo -e "${BLUE}Updating Ducktape formula...${NC}"
 
 # Get current version from the formula
-CURRENT_VERSION=$(grep 'version "' Formula/ducktape.rb | cut -d'"' -f2)
-echo "Current version in formula: ${CURRENT_VERSION}"
+CURRENT_VERSION=$(grep -m 1 'version "' Formula/ducktape.rb | sed 's/version "//g' | sed 's/"//g')
+echo -e "${BLUE}Current version in formula: ${YELLOW}${CURRENT_VERSION}${NC}"
 
-# Prompt for version update
-read -p "Enter new version (format x.y.z): " NEW_VERSION
+NEW_VERSION="0.10.0"
+echo -e "${BLUE}Setting new version to: ${YELLOW}${NEW_VERSION}${NC}"
 
-# Update version in formula
-sed -i '' "s/version \"${CURRENT_VERSION}\"/version \"${NEW_VERSION}\"/" Formula/ducktape.rb
+# Calculate SHA256 for the GitHub tarball
+SHA256=$(curl -sL "https://github.com/ducktapeai/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
 
-# Create the release tarball URL
-GITHUB_URL="https://github.com/ducktapeai/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz"
-
-# Download tarball to calculate SHA
-echo "Downloading release tarball to calculate SHA256..."
-TARBALL="/tmp/ducktape-${NEW_VERSION}.tar.gz"
-curl -L -o "$TARBALL" "$GITHUB_URL"
-SHA256=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)
-rm -f "$TARBALL"
-
-# Update formula with new URL and SHA
+# Update the formula
 cat > Formula/ducktape.rb << EOL
 class Ducktape < Formula
   desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
   homepage "https://github.com/ducktapeai/ducktape"
+  url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v${NEW_VERSION}.tar.gz"
   version "${NEW_VERSION}"
-  url "${GITHUB_URL}"
   sha256 "${SHA256}"
   license "MIT"
 
   depends_on "rust" => :build
 
   def install
-    system "cargo", "build", "--release"
-    bin.install "target/release/ducktape"
+    system "cargo", "install", "--root", prefix, "--path", "."
     
     # Generate shell completions
     output = Utils.safe_popen_read(bin/"ducktape", "completions")
@@ -66,9 +77,6 @@ class Ducktape < Formula
 end
 EOL
 
-echo "Updated formula with version ${NEW_VERSION}"
-echo "Don't forget to:"
-echo "1. Make the ducktape repo public"
-echo "2. Create and push tag v${NEW_VERSION}"
-echo "3. Create GitHub release with tag v${NEW_VERSION}"
-echo "4. Test installation with: brew install ducktapeai/ducktape/ducktape"
+echo -e "${GREEN}Successfully updated formula to version ${NEW_VERSION}${NC}"
+echo -e "${BLUE}To install the new version, run:${NC}"
+echo -e "${YELLOW}brew install --build-from-source Formula/ducktape.rb${NC}"
