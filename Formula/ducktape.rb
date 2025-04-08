@@ -18,6 +18,7 @@ class Ducktape < Formula
     (fish_completion/"ducktape.fish").write output
     
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
+    bin.install "ducktape" => "#{HOMEBREW_PREFIX}/bin/ducktape"
   end
 
   test do
