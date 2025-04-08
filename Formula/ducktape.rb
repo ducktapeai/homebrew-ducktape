@@ -1,9 +1,9 @@
 class Ducktape < Formula
   desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
   homepage "https://github.com/ducktapeai/ducktape"
-  url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.11.7.tar.gz"
-  version "0.11.7"
-  sha256 "d24619fca5c2b080a1b8d8b500bd8430a1fcfd55bf79f71fe36a772f726608fa"
+  url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.11.8.tar.gz"
+  version "0.11.8"
+  sha256 "72eb2c0d3804e0138d7c8f179b5a3570184e887b9aad63acde28d4179efb16a0"
   license "MIT"
 
   depends_on "rust" => :build
@@ -18,7 +18,6 @@ class Ducktape < Formula
     (fish_completion/"ducktape.fish").write output
     
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
-    bin.install "ducktape" => "#{HOMEBREW_PREFIX}/bin/ducktape"
   end
 
   test do
