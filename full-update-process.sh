@@ -29,6 +29,7 @@ for cmd in git curl shasum brew gh; do
 done
 
 # Ensure Homebrew environment is set
+export PATH="/opt/homebrew/bin:$PATH"
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # Function to check if a directory is a git repository
@@ -160,6 +161,7 @@ echo -e "${GREEN}Installation complete${NC}"
 # Step 12: Verify the installation
 echo -e "${BLUE}Verifying installed version...${NC}"
 INSTALLED_VERSION=$(ducktape --version)
+echo "Using ducktape from: $(which ducktape)"
 if [[ "$INSTALLED_VERSION" == *"version $NEW_VERSION"* ]]; then
     echo -e "${GREEN}Success: $INSTALLED_VERSION${NC}"
 else
