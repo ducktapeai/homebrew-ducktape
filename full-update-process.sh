@@ -40,6 +40,37 @@ check_git_repo() {
     fi
 }
 
+# Step 0: Check if the GitHub repository is public
+check_repo_public() {
+    echo -e "${BLUE}Checking if the GitHub repository is public...${NC}"
+    REPO_STATUS=$(gh repo view ducktapeai/ducktape --json isPrivate -q .isPrivate 2>/dev/null || echo "error")
+
+    if [ "$REPO_STATUS" == "true" ]; then
+        echo -e "${RED}Error: The repository is private. Please set it to public.${NC}"
+        while true; do
+            echo -e "${YELLOW}Pause: Set the repository to public and type 'yes' to retry or 'no' to exit.${NC}"
+            read -r RESPONSE
+            if [ "$RESPONSE" == "yes" ]; then
+                check_repo_public # Recheck after user action
+                break
+            elif [ "$RESPONSE" == "no" ]; then
+                echo -e "${RED}Exiting script as requested.${NC}"
+                exit 1
+            else
+                echo -e "${YELLOW}Invalid input. Please type 'yes' or 'no'.${NC}"
+            fi
+        done
+    elif [ "$REPO_STATUS" == "error" ]; then
+        echo -e "${RED}Error: Unable to connect to the repository. Please check your network or GitHub access.${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}The repository is public. Proceeding...${NC}"
+    fi
+}
+
+# Call the function at the start of the script
+check_repo_public
+
 # Check both repositories exist and are git repos
 check_git_repo "$DUCKTAPE_DIR"
 check_git_repo "$HOMEBREW_DIR"
