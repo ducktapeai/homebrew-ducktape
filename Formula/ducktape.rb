@@ -11,11 +11,19 @@ class Ducktape < Formula
   def install
     system "cargo", "install", "--root", prefix, "--path", "."
     
-    # Generate shell completions
-    output = Utils.safe_popen_read(bin/"ducktape", "completions")
-    (bash_completion/"ducktape").write output
-    (zsh_completion/"_ducktape").write output
-    (fish_completion/"ducktape.fish").write output
+    # Generate shell completions - safely handle potential error with .env file
+    begin
+      # Create empty .env file to prevent completion generation errors
+      touch_path = File.join(Dir.pwd, ".env")
+      FileUtils.touch(touch_path) unless File.exist?(touch_path)
+      
+      output = Utils.safe_popen_read(bin/"ducktape", "completions")
+      (bash_completion/"ducktape").write output
+      (zsh_completion/"_ducktape").write output
+      (fish_completion/"ducktape.fish").write output
+    rescue => e
+      opoo "Failed to generate shell completions: #{e}"
+    end
     
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
