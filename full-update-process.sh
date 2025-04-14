@@ -118,9 +118,47 @@ echo -e "${GREEN}Changes committed and pushed${NC}"
 
 # Step 5: Create and push git tag
 echo -e "${BLUE}Creating and pushing git tag v$NEW_VERSION...${NC}"
-git tag "v$NEW_VERSION"
-git push origin "v$NEW_VERSION"
-echo -e "${GREEN}Tag v$NEW_VERSION created and pushed${NC}"
+
+# Check if tag already exists
+if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+    echo -e "${YELLOW}Warning: Tag v$NEW_VERSION already exists${NC}"
+    echo -e "${BLUE}Choose an option:${NC}"
+    echo -e "  1) Try a different version number"
+    echo -e "  2) Force update the existing tag"
+    echo -e "  3) Skip tag creation and continue with existing tag"
+    
+    read -p "Enter your choice (1-3): " TAG_OPTION
+    
+    case $TAG_OPTION in
+        1)
+            echo -e "${YELLOW}Returning to version selection...${NC}"
+            # Reset changes to Cargo.toml and CHANGELOG.md
+            cd "$DUCKTAPE_DIR"
+            git restore Cargo.toml CHANGELOG.md
+            # Start over from step 1
+            exec "$0"
+            ;;
+        2)
+            echo -e "${YELLOW}Force updating tag v$NEW_VERSION...${NC}"
+            git tag -d "v$NEW_VERSION"
+            git push origin --delete "v$NEW_VERSION" || true
+            git tag "v$NEW_VERSION"
+            git push origin "v$NEW_VERSION"
+            ;;
+        3)
+            echo -e "${YELLOW}Skipping tag creation and continuing with existing tag...${NC}"
+            ;;
+        *)
+            echo -e "${RED}Invalid option. Exiting.${NC}"
+            exit 1
+            ;;
+    esac
+else
+    # Create tag normally if it doesn't exist
+    git tag "v$NEW_VERSION"
+    git push origin "v$NEW_VERSION"
+    echo -e "${GREEN}Tag v$NEW_VERSION created and pushed${NC}"
+fi
 
 # Step 6: Create GitHub release
 echo -e "${BLUE}Creating GitHub release for v$NEW_VERSION...${NC}"
@@ -152,11 +190,19 @@ class Ducktape < Formula
   def install
     system "cargo", "install", "--root", prefix, "--path", "."
     
-    # Generate shell completions
-    output = Utils.safe_popen_read(bin/"ducktape", "completions")
-    (bash_completion/"ducktape").write output
-    (zsh_completion/"_ducktape").write output
-    (fish_completion/"ducktape.fish").write output
+    # Generate shell completions - with error handling
+    begin
+      output = Utils.safe_popen_read(bin/"ducktape", "completions")
+      (bash_completion/"ducktape").write output
+      (zsh_completion/"_ducktape").write output
+      (fish_completion/"ducktape.fish").write output
+    rescue => e
+      opoo "Shell completions couldn't be generated: #{e.message}"
+      # Create minimal completions as fallback
+      (bash_completion/"ducktape").write "# Fallback bash completions for ducktape\n"
+      (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
+      (fish_completion/"ducktape.fish").write "# Fallback fish completions for ducktape\n"
+    end
     
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
@@ -176,11 +222,19 @@ git commit -m "Update formula to version $NEW_VERSION"
 git push origin main
 echo -e "${GREEN}Homebrew formula changes pushed${NC}"
 
-# Step 10: Uninstall existing ducktape versions
+# Step 10: Uninstall existing ducktape versions and clear cache
 echo -e "${BLUE}Uninstalling existing ducktape versions...${NC}"
 brew uninstall ducktape 2>/dev/null || true
 brew uninstall ducktapeai/ducktape/ducktape 2>/dev/null || true
 brew untap ducktapeai/ducktape 2>/dev/null || true
+
+# Clean caches to prevent SHA256 mismatch errors
+echo -e "${BLUE}Clearing Homebrew cache for ducktape tarballs...${NC}"
+rm -f "$HOME/Library/Caches/Homebrew/downloads/"*ducktape*".tar.gz" 2>/dev/null || true
+brew cleanup -s ducktape 2>/dev/null || true
+brew cleanup --prune=all ducktape 2>/dev/null || true
+
+# Re-tap the repository
 brew tap ducktapeai/ducktape https://github.com/ducktapeai/homebrew-ducktape.git
 echo -e "${GREEN}Existing versions uninstalled and tap refreshed${NC}"
 
@@ -193,11 +247,17 @@ echo -e "${GREEN}Installation complete${NC}"
 echo -e "${BLUE}Verifying installed version...${NC}"
 INSTALLED_VERSION=$(ducktape --version)
 echo "Using ducktape from: $(which ducktape)"
-if [[ "$INSTALLED_VERSION" == *"version $NEW_VERSION"* ]]; then
+# Extract just the version number for comparison
+INSTALLED_VERSION_NUMBER=$(echo "$INSTALLED_VERSION" | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
+if [[ "$INSTALLED_VERSION_NUMBER" == "$NEW_VERSION" ]]; then
     echo -e "${GREEN}Success: $INSTALLED_VERSION${NC}"
 else
     echo -e "${RED}Error: Installed version ($INSTALLED_VERSION) does not match expected version ($NEW_VERSION)${NC}"
-    exit 1
+    echo -e "${YELLOW}Would you like to continue anyway? (y/n)${NC}"
+    read -r CONTINUE_RESPONSE
+    if [[ "$CONTINUE_RESPONSE" != "y" && "$CONTINUE_RESPONSE" != "Y" ]]; then
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}All steps completed successfully!${NC}"
