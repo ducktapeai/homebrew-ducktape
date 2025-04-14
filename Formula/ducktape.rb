@@ -3,7 +3,7 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/refs/tags/v0.11.19.tar.gz"
   version "0.11.19"
-  sha256 "1f0122af3eabbc5230f399a7bc80d931c7ba6869fe33721dc6bb6083912f83ad"
+  sha256 "fdc89a63c99231929f2a6f9d2b32da55cc841e0af9aade94ff4dd82c8147b4bb"
   license "MIT"
 
   depends_on "rust" => :build
@@ -11,11 +11,19 @@ class Ducktape < Formula
   def install
     system "cargo", "install", "--root", prefix, "--path", "."
     
-    # Generate shell completions
-    output = Utils.safe_popen_read(bin/"ducktape", "completions")
-    (bash_completion/"ducktape").write output
-    (zsh_completion/"_ducktape").write output
-    (fish_completion/"ducktape.fish").write output
+    # Generate shell completions - with error handling
+    begin
+      output = Utils.safe_popen_read(bin/"ducktape", "completions")
+      (bash_completion/"ducktape").write output
+      (zsh_completion/"_ducktape").write output
+      (fish_completion/"ducktape.fish").write output
+    rescue => e
+      opoo "Shell completions couldn't be generated: #{e.message}"
+      # Create minimal completions as fallback
+      (bash_completion/"ducktape").write "# Fallback bash completions for ducktape\n"
+      (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
+      (fish_completion/"ducktape.fish").write "# Fallback fish completions for ducktape\n"
+    end
     
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
