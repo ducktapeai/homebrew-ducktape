@@ -281,98 +281,83 @@ else
     echo -e "${RED}Direct download failed${RESET}"
 fi
 
-# Step 11: Clean Homebrew cache more aggressively
-echo -e "\n${YELLOW}Cleaning Homebrew cache more aggressively...${RESET}"
-brew cleanup -s
-echo -e "${GREEN}Homebrew cache cleaned${RESET}"
-
-# Step 12: Update Homebrew formula with the verified SHA - write directly to file
+# Step 11: Update Homebrew formula with the verified SHA
 echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
 cd "$HOMEBREW_PATH"
 
-# Get the current SHA from the formula file
+# Extract current values from the formula
+CURRENT_VERSION=$(grep -E 'version "[^"]+"' "$FORMULA_PATH" | sed 's/^.*version "\(.*\)".*$/\1/')
 CURRENT_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
-echo -e "${YELLOW}Current formula SHA: $CURRENT_SHA${RESET}"
-echo -e "${YELLOW}New SHA to set: $SHA256${RESET}"
 
-# Create a new formula file with the correct SHA
-echo -e "${GREEN}Creating new formula with correct SHA256${RESET}"
+# Print current values for verification
+echo -e "${YELLOW}Current formula values: version=$CURRENT_VERSION, SHA=$CURRENT_SHA${RESET}"
+echo -e "${YELLOW}New values to set: version=$NEW_VERSION, SHA=$SHA256${RESET}"
+
+# Always update the SHA256 using a direct file replacement approach
+echo -e "${GREEN}Updating formula with verified SHA256${RESET}"
+
+# Create a temporary file with the updated formula content
 TMP_FORMULA="/tmp/ducktape-formula.rb"
-(
-  echo "class Ducktape < Formula"
-  echo "  desc \"AI-powered terminal tool for Apple Calendar, Reminders and Notes\""
-  echo "  homepage \"https://github.com/ducktapeai/ducktape\""
-  echo "  url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\""
-  echo "  version \"$NEW_VERSION\""
-  echo "  sha256 \"$SHA256\""
-  echo "  license \"MIT\""
-  echo ""
-  echo "  depends_on \"rust\" => :build"
-  echo ""
-  echo "  def install"
-  echo "    system \"cargo\", \"install\", \"--root\", prefix, \"--path\", \".\""
-  echo "    "
-  echo "    # Generate shell completions - with error handling"
-  echo "    begin"
-  echo "      output = Utils.safe_popen_read(bin/\"ducktape\", \"completions\")"
-  echo "      (bash_completion/\"ducktape\").write output"
-  echo "      (zsh_completion/\"_ducktape\").write output"
-  echo "      (fish_completion/\"ducktape.fish\").write output"
-  echo "    rescue => e"
-  echo "      opoo \"Shell completions couldn't be generated: #{e.message}\""
-  echo "      # Create minimal completions as fallback"
-  echo "      (bash_completion/\"ducktape\").write \"# Fallback bash completions for ducktape\\n\""
-  echo "      (zsh_completion/\"_ducktape\").write \"# Fallback zsh completions for ducktape\\n\""
-  echo "      (fish_completion/\"ducktape.fish\").write \"# Fallback fish completions for ducktape\\n\""
-  echo "    end"
-  echo "    "
-  echo "    man1.install \"man/ducktape.1\" if File.exist?(\"man/ducktape.1\")"
-  echo "  end"
-  echo ""
-  echo "  test do"
-  echo "    assert_match version.to_s, shell_output(\"\#{bin}/ducktape --version\")"
-  echo "    system \"\#{bin}/ducktape\", \"calendar\", \"list\""
-  echo "  end"
-  echo "end"
-) > "$TMP_FORMULA"
+cat "$FORMULA_PATH" | sed \
+    -e "s|version \"$CURRENT_VERSION\"|version \"$NEW_VERSION\"|g" \
+    -e "s|sha256 \"$CURRENT_SHA\"|sha256 \"$SHA256\"|g" \
+    -e "s|url \".*\"|url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\"|g" \
+    > "$TMP_FORMULA"
 
-# Replace the formula file
+# Verify the SHA was properly updated in the temp file
+NEW_SHA_IN_FILE=$(grep -E 'sha256 "[^"]+"' "$TMP_FORMULA" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+if [[ "$NEW_SHA_IN_FILE" != "$SHA256" ]]; then
+    echo -e "${RED}Error: SHA256 was not properly updated in formula file.${RESET}"
+    echo -e "${RED}Expected: $SHA256${RESET}"
+    echo -e "${RED}Found: $NEW_SHA_IN_FILE${RESET}"
+    echo -e "${YELLOW}Using direct pattern replacement as fallback...${RESET}"
+    
+    # Fallback to direct pattern replacement
+    awk -v newver="$NEW_VERSION" -v newsha="$SHA256" '
+    /^  version/ { print "  version \"" newver "\""; next }
+    /^  sha256/ { print "  sha256 \"" newsha "\""; next }
+    /^  url/ { print "  url \"https://github.com/ducktapeai/ducktape/archive/v" newver ".tar.gz\""; next }
+    { print }
+    ' "$FORMULA_PATH" > "$TMP_FORMULA"
+    
+    # Verify again
+    NEW_SHA_IN_FILE=$(grep -E 'sha256 "[^"]+"' "$TMP_FORMULA" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+    if [[ "$NEW_SHA_IN_FILE" != "$SHA256" ]]; then
+        echo -e "${RED}Critical error: Could not update SHA256 in formula file.${RESET}"
+        exit 1
+    fi
+fi
+
+# Replace the original formula with the updated one
 cp "$TMP_FORMULA" "$FORMULA_PATH"
 rm -f "$TMP_FORMULA"
 
-# Commit and push the formula changes
+# Verify the SHA was properly updated in the actual file
+UPDATED_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+echo -e "${GREEN}Updated formula SHA256: $UPDATED_SHA${RESET}"
+
+if [[ "$UPDATED_SHA" != "$SHA256" ]]; then
+    echo -e "${RED}Critical error: Formula SHA256 doesn't match expected value after update!${RESET}"
+    echo -e "${RED}Expected: $SHA256${RESET}"
+    echo -e "${RED}Found in formula: $UPDATED_SHA${RESET}"
+    echo -e "${RED}Please update the SHA256 manually in the formula file.${RESET}"
+    exit 1
+fi
+
+# Step 12: Commit and push Homebrew formula changes
 echo -e "\n${YELLOW}Committing and pushing Homebrew formula changes...${RESET}"
 git add "$FORMULA_PATH"
 
 # Check if there are actual changes to commit
 if git diff --staged --quiet; then
     echo -e "${YELLOW}No changes detected in formula file. This is unexpected.${RESET}"
-    echo -e "${YELLOW}Manually verifying SHA256 in formula...${RESET}"
-    
-    # Manually check if the SHA in the file matches what we expect
-    FORMULA_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
-    echo -e "${YELLOW}SHA256 in formula file: $FORMULA_SHA${RESET}"
-    echo -e "${YELLOW}Expected SHA256: $SHA256${RESET}"
-    
-    if [[ "$FORMULA_SHA" == "$SHA256" ]]; then
-        echo -e "${GREEN}Formula already has the correct SHA256${RESET}"
-    else
-        echo -e "${RED}Formula has incorrect SHA256 but git diff didn't detect changes.${RESET}"
-        echo -e "${RED}This suggests an issue with the sed command or file encoding.${RESET}"
-        echo -e "${YELLOW}Trying alternative update method...${RESET}"
-        
-        # Create a temp file with the correct content
-        TMP_FORMULA="/tmp/ducktape-formula.rb"
-        cat "$FORMULA_PATH" | sed "s|sha256 \".*\"|sha256 \"$SHA256\"|" > "$TMP_FORMULA"
-        cp "$TMP_FORMULA" "$FORMULA_PATH"
-        rm -f "$TMP_FORMULA"
-        
-        # Try adding again
-        git add "$FORMULA_PATH"
-    fi
+    # Force a commit anyway in case the file was updated but git doesn't detect changes
+    git add -f "$FORMULA_PATH"
+    git commit -m "Update ducktape formula to version $NEW_VERSION with SHA256 $SHA256"
+    git push
+    echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
 else
-    echo -e "${GREEN}Changes detected, committing...${RESET}"
-    git commit -m "Update ducktape formula to version $NEW_VERSION with correct SHA256"
+    git commit -m "Update ducktape formula to version $NEW_VERSION with SHA256 $SHA256"
     git push
     echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
 fi
