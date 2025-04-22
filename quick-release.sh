@@ -44,34 +44,6 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
-# Check if we need to clean the CHANGELOG first
-echo -e "${YELLOW}Checking CHANGELOG.md for duplicate entries...${RESET}"
-DUCKTAPE_PATH="/Users/shaunstuart/RustroverProjects/ducktape"
-CHANGELOG_PATH="$DUCKTAPE_PATH/CHANGELOG.md"
-
-if [ -f "$CHANGELOG_PATH" ]; then
-    VERSION_COUNT=$(grep -c "## \[$VERSION\]" "$CHANGELOG_PATH")
-    
-    if [ "$VERSION_COUNT" -gt 0 ]; then
-        echo -e "${YELLOW}Warning: Version $VERSION already exists in CHANGELOG.md ($VERSION_COUNT occurrences)${RESET}"
-        
-        if [ -f "./fix-changelog.sh" ]; then
-            read -p "Would you like to run fix-changelog.sh to clean up duplicates? (y/n): " fix_choice
-            if [[ "$fix_choice" =~ ^[Yy]$ ]]; then
-                chmod +x ./fix-changelog.sh
-                ./fix-changelog.sh "$CHANGELOG_PATH"
-            fi
-        else
-            echo -e "${YELLOW}fix-changelog.sh not found. You may want to manually clean your CHANGELOG.${RESET}"
-            read -p "Continue anyway? (y/n): " continue_choice
-            if [[ ! "$continue_choice" =~ ^[Yy]$ ]]; then
-                echo -e "${YELLOW}Release aborted${RESET}"
-                exit 0
-            fi
-        fi
-    fi
-fi
-
 # Execute the full release script with --skip-build flag
 echo -e "${BLUE}=======================================================${RESET}"
 echo -e "${BLUE}Ducktape Quick Release - Version $VERSION${RESET}"
