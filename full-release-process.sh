@@ -153,7 +153,31 @@ git tag -a "v$NEW_VERSION" -m "Release $NEW_VERSION: $CHANGELOG_MESSAGE"
 echo -e "\n${YELLOW}Pushing changes and tags to GitHub...${RESET}"
 cd "$DUCKTAPE_PATH"
 git push
-git push --tags
+
+# Push tags with error handling for already existing tags
+echo -e "\n${YELLOW}Pushing tags to GitHub...${RESET}"
+if ! git push --tags 2> /tmp/git_push_error; then
+    # Check if error is just about already existing tags
+    if grep -q "rejected.*already exists" /tmp/git_push_error; then
+        echo -e "${YELLOW}Warning: Some tags were rejected because they already exist in the remote.${RESET}"
+        echo -e "${YELLOW}Only new tags were pushed. This is normal if you're re-running the release process.${RESET}"
+        # Show which tag was successfully pushed (should be our new version)
+        grep "new tag" /tmp/git_push_error | sed 's/^/  /'
+        # Continue with the process despite this "error"
+    else
+        # If there was a different error, show it and ask to continue
+        echo -e "${RED}Error pushing tags:${RESET}"
+        cat /tmp/git_push_error
+        read -p "Continue despite tag push errors? (y/n): " continue_tag_push
+        if [[ ! "$continue_tag_push" =~ ^[Yy]$ ]]; then
+            echo -e "${RED}Release process aborted due to tag push errors${RESET}"
+            exit 1
+        fi
+    fi
+else
+    echo -e "${GREEN}Tags pushed successfully${RESET}"
+fi
+rm -f /tmp/git_push_error
 
 # Step 10: Create a tarball
 echo -e "\n${YELLOW}Creating release tarball...${RESET}"
