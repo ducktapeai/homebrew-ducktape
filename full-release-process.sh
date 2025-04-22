@@ -147,7 +147,26 @@ git commit -m "Bump version to $NEW_VERSION: $CHANGELOG_MESSAGE"
 # Step 8: Create a git tag
 echo -e "\n${YELLOW}Creating git tag v$NEW_VERSION...${RESET}"
 cd "$DUCKTAPE_PATH"
-git tag -a "v$NEW_VERSION" -m "Release $NEW_VERSION: $CHANGELOG_MESSAGE"
+if git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; then
+    echo -e "${YELLOW}Warning: Tag v$NEW_VERSION already exists${RESET}"
+    read -p "Do you want to continue with the existing tag? (y/n): " continue_with_tag
+    if [[ ! "$continue_with_tag" =~ ^[Yy]$ ]]; then
+        read -p "Do you want to force update the tag? (y/n): " force_tag
+        if [[ "$force_tag" =~ ^[Yy]$ ]]; then
+            git tag -d "v$NEW_VERSION"
+            git tag -a "v$NEW_VERSION" -m "Release $NEW_VERSION: $CHANGELOG_MESSAGE"
+            echo -e "${GREEN}Tag v$NEW_VERSION force-updated${RESET}"
+        else
+            echo -e "${RED}Release process aborted due to tag conflict${RESET}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}Continuing with existing tag v$NEW_VERSION${RESET}"
+    fi
+else
+    git tag -a "v$NEW_VERSION" -m "Release $NEW_VERSION: $CHANGELOG_MESSAGE"
+    echo -e "${GREEN}Tag v$NEW_VERSION created${RESET}"
+fi
 
 # Step 9: Push the changes and tags
 echo -e "\n${YELLOW}Pushing changes and tags to GitHub...${RESET}"
