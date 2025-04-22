@@ -29,7 +29,7 @@ class Ducktape < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/ducktape --version")
-    system "#{bin}/ducktape", "calendar", "list"
+    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
+    system "\#{bin}/ducktape", "calendar", "list"
   end
 end
