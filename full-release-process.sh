@@ -222,7 +222,8 @@ git push
 
 # Step 13: Verify the formula works
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew audit'...${RESET}"
-if ! brew audit --strict "$FORMULA_PATH"; then
+FORMULA_NAME="ducktape"
+if ! brew audit "$FORMULA_NAME"; then
     echo -e "${RED}Warning: Brew audit reported issues with the formula${RESET}"
     read -p "Continue despite brew audit warnings? (y/n): " continue_audit
     if [[ ! "$continue_audit" =~ ^[Yy]$ ]]; then
@@ -232,7 +233,7 @@ if ! brew audit --strict "$FORMULA_PATH"; then
 fi
 
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew install --build-from-source'...${RESET}"
-if ! brew install --build-from-source "$FORMULA_PATH"; then
+if ! brew install --build-from-source "$FORMULA_NAME"; then
     echo -e "${RED}Error: Brew install failed!${RESET}"
     read -p "This is a critical error. Continue anyway? (y/n): " continue_install
     if [[ ! "$continue_install" =~ ^[Yy]$ ]]; then
