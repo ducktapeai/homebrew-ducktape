@@ -321,58 +321,79 @@ echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
 # Clean up temporary files
 rm -f "$DIRECT_TARBALL"
 
-# Step 13: Verify the formula works by installing with brew
-echo -e "\n${YELLOW}Testing the formula by installing with brew...${RESET}"
+# Step 13: Installing the formula
+echo -e "\n${YELLOW}Installing the formula with brew install...${RESET}"
 
-# Uninstall first if it exists
-echo -e "${YELLOW}Uninstalling previous version if present...${RESET}"
-brew uninstall ducktape 2>/dev/null || true
-
-# Try running brew update and brew tap (if needed) to ensure latest formula is used
-echo -e "${YELLOW}Running brew update to refresh formula...${RESET}"
+# Make sure we have the latest brew information
+echo -e "${YELLOW}Running brew update to refresh taps...${RESET}"
 brew update
 
-# Force tap refresh if needed
-echo -e "${YELLOW}Ensuring tap is up to date...${RESET}"
+# Uninstall any previous version to get a clean install
+echo -e "${YELLOW}Uninstalling previous versions if present...${RESET}"
+brew uninstall ducktape 2>/dev/null || true
+
+# Explicitly tap our repository
+echo -e "${YELLOW}Explicitly tapping the ducktapeai/ducktape repository...${RESET}"
 brew untap ducktapeai/ducktape 2>/dev/null || true
 brew tap ducktapeai/ducktape
 
-echo -e "${YELLOW}Installing with brew install...${RESET}"
-if ! brew install ducktape; then
-    echo -e "${RED}Error: Failed to install with brew install${RESET}"
-    echo -e "${YELLOW}Attempting install with --build-from-source...${RESET}"
+# Force a full re-download to avoid any cached files issues
+echo -e "${YELLOW}Installing formula from scratch (with build from source)...${RESET}"
+brew fetch --force --build-from-source ducktapeai/ducktape/ducktape || {
+    echo -e "${RED}Fetch failed. This could indicate SHA issues still exist.${RESET}"
+    echo -e "${YELLOW}Let's try installing directly which might use the correct SHA from the freshly updated formula.${RESET}"
+}
+
+# Install with --verbose to see what's happening
+if ! brew install --verbose ducktapeai/ducktape/ducktape; then
+    echo -e "${RED}Error: Failed to install ducktape with standard install${RESET}"
+    echo -e "${YELLOW}Trying installation with --build-from-source...${RESET}"
     
-    if ! brew install --build-from-source ducktape; then
-        echo -e "${RED}Error: Brew install failed with --build-from-source as well${RESET}"
-        read -p "This is a critical error. Continue anyway? (y/n): " continue_install
+    if ! brew install --verbose --build-from-source ducktapeai/ducktape/ducktape; then
+        echo -e "${RED}Error: Brew install failed even with build-from-source!${RESET}"
+        echo -e "${RED}This suggests there may still be issues with the formula or Homebrew cache.${RESET}"
+        echo -e "\n${YELLOW}Troubleshooting suggestions:${RESET}"
+        echo -e "1. Run: brew doctor"
+        echo -e "2. Run: brew cleanup --prune=all"
+        echo -e "3. Manually check: ${FORMULA_PATH}"
+        echo -e "4. Try manually: brew fetch --force ducktapeai/ducktape/ducktape"
+        
+        # Even though install failed, ask if they want to continue with the release process
+        read -p "Continue with the release process despite installation failure? (y/n): " continue_install
         if [[ ! "$continue_install" =~ ^[Yy]$ ]]; then
-            echo -e "${RED}Release process aborted due to brew install failure${RESET}"
+            echo -e "${RED}Release process aborted due to installation failure${RESET}"
             exit 1
         fi
     else
-        echo -e "${GREEN}Successfully installed with --build-from-source${RESET}"
+        echo -e "${GREEN}Successfully installed ducktape with --build-from-source!${RESET}"
     fi
 else
-    echo -e "${GREEN}Successfully installed with brew install${RESET}"
+    echo -e "${GREEN}Successfully installed ducktape!${RESET}"
 fi
 
-# Test the installed version
-echo -e "\n${YELLOW}Testing installed version...${RESET}"
-if installed_version=$(ducktape --version 2>/dev/null); then
-    echo -e "${GREEN}Installed version: $installed_version${RESET}"
-    if [[ "$installed_version" == *"$NEW_VERSION"* ]]; then
+# Step 14: Verify the installation
+echo -e "\n${YELLOW}Verifying installation...${RESET}"
+if command -v ducktape >/dev/null 2>&1; then
+    VERSION_OUTPUT=$(ducktape --version)
+    echo -e "${GREEN}ducktape command found: $VERSION_OUTPUT${RESET}"
+    
+    if [[ "$VERSION_OUTPUT" == *"$NEW_VERSION"* ]]; then
         echo -e "${GREEN}Version verification successful!${RESET}"
     else
-        echo -e "${RED}Warning: Installed version doesn't match expected version${RESET}"
-        echo -e "${RED}Expected: $NEW_VERSION, Found: $installed_version${RESET}"
+        echo -e "${YELLOW}Warning: Installed version ($VERSION_OUTPUT) doesn't match expected version ($NEW_VERSION)${RESET}"
     fi
 else
-    echo -e "${RED}Failed to get installed version${RESET}"
+    echo -e "${RED}Warning: ducktape command not found in path after installation${RESET}"
+    echo -e "${YELLOW}This could be due to:${RESET}"
+    echo -e "1. Installation failure"
+    echo -e "2. The binary not being properly linked"
+    echo -e "3. Path issues in your environment"
+    echo -e "\n${YELLOW}Try running: brew link --overwrite ducktape${RESET}"
 fi
 
-# Step 14: All done!
+# Step 15: All done!
 echo -e "\n${GREEN}=========================================================${RESET}"
-echo -e "${GREEN}Release process completed successfully!${RESET}"
+echo -e "${GREEN}Release process completed!${RESET}"
 echo -e "${GREEN}Version $NEW_VERSION has been released and Homebrew formula updated.${RESET}"
 echo -e "${GREEN}=========================================================${RESET}"
 echo -e "${YELLOW}Don't forget to:${RESET}"
@@ -380,3 +401,8 @@ echo -e "  - Check the GitHub repository to ensure the tag was created"
 echo -e "  - Verify that 'brew upgrade ducktape' works for users"
 echo -e "  - Update the website documentation if needed"
 echo -e "  - Announce the release to your users"
+
+# Optional: provide a direct instruction to manually install/verify if needed
+echo -e "\n${YELLOW}If installation issues persist, users can try:${RESET}"
+echo -e "  brew untap ducktapeai/ducktape && brew tap ducktapeai/ducktape"
+echo -e "  brew install ducktapeai/ducktape/ducktape"
