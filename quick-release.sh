@@ -16,6 +16,15 @@ RESET='\033[0m'
 
 FULL_RELEASE_SCRIPT="./full-release-process.sh"
 
+# Check script permissions
+if [ ! -x "$0" ]; then
+    echo -e "${YELLOW}Setting executable permission on this script...${RESET}"
+    chmod +x "$0"
+    echo -e "${GREEN}Permission granted. You can now run this script.${RESET}"
+    echo -e "${YELLOW}Please run the command again: $0 $@${RESET}"
+    exit 0
+fi
+
 # Check if full release script exists
 if [ ! -f "$FULL_RELEASE_SCRIPT" ]; then
     echo -e "${RED}Error: full-release-process.sh not found${RESET}"
@@ -24,7 +33,17 @@ if [ ! -f "$FULL_RELEASE_SCRIPT" ]; then
 fi
 
 # Make sure the script is executable
-chmod +x "$FULL_RELEASE_SCRIPT"
+if [ ! -x "$FULL_RELEASE_SCRIPT" ]; then
+    echo -e "${YELLOW}Setting executable permission on $FULL_RELEASE_SCRIPT...${RESET}"
+    chmod +x "$FULL_RELEASE_SCRIPT"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to set executable permission on $FULL_RELEASE_SCRIPT${RESET}"
+        echo -e "${YELLOW}Try running: chmod +x $FULL_RELEASE_SCRIPT${RESET}"
+        exit 1
+    else
+        echo -e "${GREEN}Permission granted on $FULL_RELEASE_SCRIPT${RESET}"
+    fi
+fi
 
 # Validate arguments
 if [[ "$#" -lt 2 ]]; then
