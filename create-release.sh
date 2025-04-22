@@ -31,6 +31,43 @@ fi
 # Make sure the script is executable
 chmod +x "$FULL_RELEASE_SCRIPT"
 
+# Check for required tools early to avoid wasting time on configuration
+echo -e "\n${YELLOW}Checking for required tools...${RESET}"
+
+# Check for Git
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}Error: git is not installed or not in PATH${RESET}"
+    exit 1
+else
+    echo -e "${GREEN}Git: OK${RESET}"
+fi
+
+# Check for Rust/Cargo and automatically set skip build if not available
+SKIP_BUILD_DEFAULT="n"
+if ! command -v cargo &> /dev/null; then
+    echo -e "${YELLOW}Warning: cargo is not installed or not in PATH${RESET}"
+    echo -e "${YELLOW}Build steps will be automatically skipped${RESET}"
+    SKIP_BUILD_DEFAULT="y"
+else
+    echo -e "${GREEN}Cargo: OK${RESET}"
+fi
+
+# Check for shasum
+if ! command -v shasum &> /dev/null; then
+    echo -e "${RED}Error: shasum is not installed or not in PATH${RESET}"
+    exit 1
+else
+    echo -e "${GREEN}shasum: OK${RESET}"
+fi
+
+# Check for brew
+if ! command -v brew &> /dev/null; then
+    echo -e "${RED}Error: brew is not installed or not in PATH${RESET}"
+    exit 1
+else
+    echo -e "${GREEN}brew: OK${RESET}"
+fi
+
 # Get the current version from the formula file
 FORMULA_PATH="./Formula/ducktape.rb"
 if [ -f "$FORMULA_PATH" ]; then
@@ -123,14 +160,21 @@ fi
 
 # Ask about build options
 echo -e "\n${YELLOW}Build Options:${RESET}"
-read -p "Skip build and test steps? (y/n): " skip_build
-if [[ "$skip_build" =~ ^[Yy]$ ]]; then
+if [ "$SKIP_BUILD_DEFAULT" = "y" ]; then
+    echo -e "${YELLOW}Build will be skipped because cargo is not available${RESET}"
     SKIP_BUILD_FLAG="--skip-build"
 else
-    SKIP_BUILD_FLAG=""
+    read -p "Skip build and test steps? (y/n) [${SKIP_BUILD_DEFAULT}]: " skip_build
+    skip_build=${skip_build:-$SKIP_BUILD_DEFAULT}
+    if [[ "$skip_build" =~ ^[Yy]$ ]]; then
+        SKIP_BUILD_FLAG="--skip-build"
+    else
+        SKIP_BUILD_FLAG=""
+    fi
 fi
 
-read -p "Skip test check? (y/n): " skip_test
+read -p "Skip test check? (y/n) [n]: " skip_test
+skip_test=${skip_test:-"n"}
 if [[ "$skip_test" =~ ^[Yy]$ ]]; then
     SKIP_TEST_FLAG="--skip-test-check"
 else
@@ -144,6 +188,41 @@ else
     WAIT_SECONDS_FLAG="--wait=$wait_seconds"
 fi
 
+# Check for duplicate version
+echo -e "\n${YELLOW}Checking for duplicate version in CHANGELOG.md...${RESET}"
+DUCKTAPE_PATH="/Users/shaunstuart/RustroverProjects/ducktape"
+CHANGELOG_PATH="$DUCKTAPE_PATH/CHANGELOG.md"
+VERSION_COUNT=0
+
+if [ -f "$CHANGELOG_PATH" ]; then
+    VERSION_COUNT=$(grep -c "## \[$NEW_VERSION\]" "$CHANGELOG_PATH")
+    
+    if [ "$VERSION_COUNT" -gt 0 ]; then
+        echo -e "${YELLOW}Warning: Version $NEW_VERSION already exists in CHANGELOG.md${RESET}"
+        echo -e "${YELLOW}Found $VERSION_COUNT occurrences.${RESET}"
+        
+        read -p "Do you want to fix duplicate entries before continuing? (y/n): " fix_duplicates
+        
+        if [[ "$fix_duplicates" =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}To fix duplicate entries, you can:${RESET}"
+            echo -e "1. Edit CHANGELOG.md manually to remove duplicates"
+            echo -e "2. Use the fix-changelog.sh script if available"
+            
+            read -p "Press enter to continue after fixing the CHANGELOG, or Ctrl+C to abort..."
+        fi
+    else
+        echo -e "${GREEN}No duplicate versions found. Proceeding...${RESET}"
+    fi
+else
+    echo -e "${YELLOW}CHANGELOG.md not found at $CHANGELOG_PATH${RESET}"
+    echo -e "${YELLOW}Skipping duplicate version check${RESET}"
+fi
+
 # Execute the full release process
 echo -e "\n${GREEN}Starting release process...${RESET}"
+echo -e "${YELLOW}Running: $FULL_RELEASE_SCRIPT \"$NEW_VERSION\" \"$CHANGELOG_MESSAGE\" --type=\"$CHANGE_TYPE\" $SKIP_BUILD_FLAG $SKIP_TEST_FLAG $WAIT_SECONDS_FLAG${RESET}"
+
+# Add a confirmation before executing
+read -p "Press enter to continue or Ctrl+C to abort..."
+
 $FULL_RELEASE_SCRIPT "$NEW_VERSION" "$CHANGELOG_MESSAGE" --type="$CHANGE_TYPE" $SKIP_BUILD_FLAG $SKIP_TEST_FLAG $WAIT_SECONDS_FLAG
