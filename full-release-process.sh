@@ -281,7 +281,12 @@ else
     echo -e "${RED}Direct download failed${RESET}"
 fi
 
-# Step 11: Update Homebrew formula with the verified SHA
+# Step 11: Clean Homebrew cache more aggressively
+echo -e "\n${YELLOW}Cleaning Homebrew cache more aggressively...${RESET}"
+brew cleanup -s
+echo -e "${GREEN}Homebrew cache cleaned${RESET}"
+
+# Step 12: Update Homebrew formula with the verified SHA - write directly to file
 echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
 cd "$HOMEBREW_PATH"
 
@@ -290,9 +295,50 @@ CURRENT_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\
 echo -e "${YELLOW}Current formula SHA: $CURRENT_SHA${RESET}"
 echo -e "${YELLOW}New SHA to set: $SHA256${RESET}"
 
-# Force update the formula with the correct SHA
-echo -e "${GREEN}Updating formula with correct SHA256${RESET}"
-sed -i '' "s|sha256 \".*\"|sha256 \"$SHA256\"|" "$FORMULA_PATH"
+# Create a new formula file with the correct SHA
+echo -e "${GREEN}Creating new formula with correct SHA256${RESET}"
+TMP_FORMULA="/tmp/ducktape-formula.rb"
+(
+  echo "class Ducktape < Formula"
+  echo "  desc \"AI-powered terminal tool for Apple Calendar, Reminders and Notes\""
+  echo "  homepage \"https://github.com/ducktapeai/ducktape\""
+  echo "  url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\""
+  echo "  version \"$NEW_VERSION\""
+  echo "  sha256 \"$SHA256\""
+  echo "  license \"MIT\""
+  echo ""
+  echo "  depends_on \"rust\" => :build"
+  echo ""
+  echo "  def install"
+  echo "    system \"cargo\", \"install\", \"--root\", prefix, \"--path\", \".\""
+  echo "    "
+  echo "    # Generate shell completions - with error handling"
+  echo "    begin"
+  echo "      output = Utils.safe_popen_read(bin/\"ducktape\", \"completions\")"
+  echo "      (bash_completion/\"ducktape\").write output"
+  echo "      (zsh_completion/\"_ducktape\").write output"
+  echo "      (fish_completion/\"ducktape.fish\").write output"
+  echo "    rescue => e"
+  echo "      opoo \"Shell completions couldn't be generated: #{e.message}\""
+  echo "      # Create minimal completions as fallback"
+  echo "      (bash_completion/\"ducktape\").write \"# Fallback bash completions for ducktape\\n\""
+  echo "      (zsh_completion/\"_ducktape\").write \"# Fallback zsh completions for ducktape\\n\""
+  echo "      (fish_completion/\"ducktape.fish\").write \"# Fallback fish completions for ducktape\\n\""
+  echo "    end"
+  echo "    "
+  echo "    man1.install \"man/ducktape.1\" if File.exist?(\"man/ducktape.1\")"
+  echo "  end"
+  echo ""
+  echo "  test do"
+  echo "    assert_match version.to_s, shell_output(\"\#{bin}/ducktape --version\")"
+  echo "    system \"\#{bin}/ducktape\", \"calendar\", \"list\""
+  echo "  end"
+  echo "end"
+) > "$TMP_FORMULA"
+
+# Replace the formula file
+cp "$TMP_FORMULA" "$FORMULA_PATH"
+rm -f "$TMP_FORMULA"
 
 # Commit and push the formula changes
 echo -e "\n${YELLOW}Committing and pushing Homebrew formula changes...${RESET}"
@@ -334,7 +380,7 @@ fi
 # Remove temporary files
 rm -f "$DIRECT_TARBALL" "$GITHUB_TARBALL"
 
-# Step 12: Verify the formula works
+# Step 13: Verify the formula works
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew audit'...${RESET}"
 FORMULA_NAME="ducktape"
 if ! brew audit "$FORMULA_NAME"; then
@@ -356,7 +402,7 @@ if ! brew install --build-from-source "$FORMULA_NAME"; then
     fi
 fi
 
-# Step 13: All done!
+# Step 14: All done!
 echo -e "\n${GREEN}=========================================================${RESET}"
 echo -e "${GREEN}Release process completed successfully!${RESET}"
 echo -e "${GREEN}Version $NEW_VERSION has been released and Homebrew formula updated.${RESET}"
