@@ -18,7 +18,7 @@ class Ducktape < Formula
       (zsh_completion/"_ducktape").write output
       (fish_completion/"ducktape.fish").write output
     rescue => e
-      opoo "Shell completions couldn't be generated: #{e.message}"
+      opoo "Shell completions couldn't be generated: \#{e.message}"
       # Create minimal completions as fallback
       (bash_completion/"ducktape").write "# Fallback bash completions for ducktape\n"
       (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
