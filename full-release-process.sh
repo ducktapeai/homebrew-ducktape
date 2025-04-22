@@ -11,8 +11,9 @@
 # 7. Updates the Homebrew formula with the new version and SHA
 # 8. Pushes the formula update to GitHub
 #
-# Usage: ./full-release-process.sh <version> "<changelog message>"
+# Usage: ./full-release-process.sh <version> "<changelog message>" [--skip-test-check]
 #   e.g.: ./full-release-process.sh 0.13.5 "Fixed input handling in notes module"
+#   e.g.: ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --skip-test-check
 
 set -e  # Exit on any error
 
@@ -28,11 +29,24 @@ DUCKTAPE_PATH="/Users/shaunstuart/RustroverProjects/ducktape"
 HOMEBREW_PATH="/Users/shaunstuart/RustroverProjects/homebrew-ducktape"
 FORMULA_PATH="$HOMEBREW_PATH/Formula/ducktape.rb"
 
+# Default settings
+SKIP_TEST_CHECK=0
+
+# Process flags
+for arg in "$@"; do
+    if [[ "$arg" == "--skip-test-check" ]]; then
+        SKIP_TEST_CHECK=1
+        break
+    fi
+done
+
 # Validate arguments
-if [ "$#" -lt 2 ]; then
+if [[ "$#" -lt 2 ]]; then
     echo -e "${RED}Error: Insufficient arguments${RESET}"
-    echo "Usage: ./full-release-process.sh <version> \"<changelog message>\""
+    echo "Usage: ./full-release-process.sh <version> \"<changelog message>\" [--skip-test-check]"
     echo "Example: ./full-release-process.sh 0.13.5 \"Fixed input handling in notes module\""
+    echo "Options:"
+    echo "  --skip-test-check    Continue even if tests fail (will still prompt for confirmation)"
     exit 1
 fi
 
@@ -99,7 +113,30 @@ sed -i '' "1s/^/$CHANGELOG_ENTRY/" CHANGELOG.md
 echo -e "\n${YELLOW}Building and testing the project...${RESET}"
 cd "$DUCKTAPE_PATH"
 cargo build --release
-cargo test --release -- --nocapture
+echo -e "\n${YELLOW}Running tests (this may take a few minutes)...${RESET}"
+
+# Capture test output and status
+TEST_OUTPUT=$(cargo test --release -- --nocapture 2>&1) || TEST_STATUS=$?
+
+# Check if tests failed
+if [[ -n "$TEST_STATUS" ]]; then
+    echo -e "${RED}Tests failed with status code $TEST_STATUS${RESET}"
+    echo -e "${YELLOW}Test output:${RESET}\n$TEST_OUTPUT\n"
+    
+    if [[ $SKIP_TEST_CHECK -eq 0 ]]; then
+        # Ask user if they want to continue despite failed tests
+        read -p "Do you want to continue with the release process anyway? (y/n): " continue_release
+        if [[ ! "$continue_release" =~ ^[Yy]$ ]]; then
+            echo -e "${RED}Release process aborted due to test failures${RESET}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}Continuing despite test failures (--skip-test-check flag was set)${RESET}"
+        read -p "Press Enter to continue or Ctrl+C to abort..."
+    fi
+else
+    echo -e "${GREEN}All tests passed successfully!${RESET}"
+fi
 
 # Step 7: Commit the version bump and changelog
 echo -e "\n${YELLOW}Committing version bump and changelog update...${RESET}"
@@ -142,9 +179,24 @@ git push
 
 # Step 13: Verify the formula works
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew audit'...${RESET}"
-brew audit --strict "$FORMULA_PATH"
+if ! brew audit --strict "$FORMULA_PATH"; then
+    echo -e "${RED}Warning: Brew audit reported issues with the formula${RESET}"
+    read -p "Continue despite brew audit warnings? (y/n): " continue_audit
+    if [[ ! "$continue_audit" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Release process aborted due to brew audit issues${RESET}"
+        exit 1
+    fi
+fi
+
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew install --build-from-source'...${RESET}"
-brew install --build-from-source "$FORMULA_PATH"
+if ! brew install --build-from-source "$FORMULA_PATH"; then
+    echo -e "${RED}Error: Brew install failed!${RESET}"
+    read -p "This is a critical error. Continue anyway? (y/n): " continue_install
+    if [[ ! "$continue_install" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Release process aborted due to brew install failure${RESET}"
+        exit 1
+    fi
+fi
 
 # Step 14: All done!
 echo -e "\n${GREEN}=========================================================${RESET}"
