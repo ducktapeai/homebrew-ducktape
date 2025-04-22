@@ -11,7 +11,7 @@
 # 7. Updates the Homebrew formula with the new version and SHA
 # 8. Pushes the formula update to GitHub
 #
-# Usage: ./full-release-process.sh <version> "<changelog message>" [--skip-test-check] [--skip-build]
+# Usage: ./full-release-process.sh <version> "<changelog message>" [OPTIONS]
 #   e.g.: ./full-release-process.sh 0.13.5 "Fixed input handling in notes module"
 #   e.g.: ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --skip-build
 
@@ -32,6 +32,7 @@ FORMULA_PATH="$HOMEBREW_PATH/Formula/ducktape.rb"
 # Default settings
 SKIP_TEST_CHECK=0
 SKIP_BUILD=0
+GH_WAIT_SECONDS=10
 
 # Display help message
 show_help() {
@@ -45,11 +46,13 @@ Arguments:
 Options:
   --skip-test-check    Continue even if tests fail (will still prompt for confirmation)
   --skip-build         Skip the build and test steps (use when Cargo is not available)
-  --help               Display this help message and exit
+  --wait=SECONDS       Wait SECONDS seconds for GitHub to process tag (default: 10)
+  --help, -h           Display this help message and exit
 
 Examples:
   ./full-release-process.sh 0.13.5 "Fixed input handling in notes module"
   ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --skip-build
+  ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --wait=20
 EOF
 }
 
@@ -64,6 +67,10 @@ for arg in "$@"; do
     if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
         show_help
         exit 0
+    fi
+    # Check for --wait flag with a value
+    if [[ "$arg" =~ ^--wait=[0-9]+$ ]]; then
+        GH_WAIT_SECONDS="${arg#*=}"
     fi
 done
 
@@ -218,7 +225,15 @@ fi
 # Step 7: Commit the version bump and changelog
 echo -e "\n${YELLOW}Committing version bump and changelog update...${RESET}"
 cd "$DUCKTAPE_PATH"
-git add Cargo.toml Cargo.lock CHANGELOG.md
+
+# Skip the Cargo.lock change if we're skipping the build
+if [[ $SKIP_BUILD -eq 0 ]]; then
+    git add Cargo.toml Cargo.lock CHANGELOG.md
+else
+    # In skip-build mode, we might not have a valid Cargo.lock
+    git add Cargo.toml CHANGELOG.md
+fi
+
 git commit -m "Bump version to $NEW_VERSION: $CHANGELOG_MESSAGE"
 
 # Step 8: Create a git tag
@@ -311,24 +326,46 @@ echo -e "${YELLOW}Running brew cleanup to ensure all caches are cleared...${RESE
 brew cleanup -s
 echo -e "${GREEN}Brew cleanup completed${RESET}"
 
-# Wait a moment for GitHub to fully process the new tag
-echo -e "${YELLOW}Waiting for GitHub to fully process the new tag (10 seconds)...${RESET}"
-sleep 10
+# Wait for GitHub to fully process the new tag
+echo -e "${YELLOW}Waiting for GitHub to fully process the new tag (${GH_WAIT_SECONDS} seconds)...${RESET}"
+sleep $GH_WAIT_SECONDS
 
 # Always get the SHA directly from GitHub's codeload URL for consistency
 echo -e "${YELLOW}Downloading from direct codeload URL for reliable SHA256...${RESET}"
 DIRECT_TARBALL="/tmp/ducktape-direct-$NEW_VERSION.tar.gz"
 CODELOAD_URL="https://codeload.github.com/ducktapeai/ducktape/tar.gz/refs/tags/v$NEW_VERSION"
-if curl -L -s -H "Cache-Control: no-cache" "$CODELOAD_URL" -o "$DIRECT_TARBALL"; then
-    DIRECT_SHA256=$(shasum -a 256 "$DIRECT_TARBALL" | awk '{print $1}')
-    echo -e "${GREEN}Direct download successful. SHA256: $DIRECT_SHA256${RESET}"
-    SHA256=$DIRECT_SHA256
+
+# Try multiple times to download from GitHub if needed
+MAX_RETRIES=3
+retry_count=0
+download_success=false
+
+while [[ $retry_count -lt $MAX_RETRIES && $download_success == false ]]; do
+    if curl -L -s -H "Cache-Control: no-cache" "$CODELOAD_URL" -o "$DIRECT_TARBALL"; then
+        if [[ -s "$DIRECT_TARBALL" ]]; then
+            DIRECT_SHA256=$(shasum -a 256 "$DIRECT_TARBALL" | awk '{print $1}')
+            echo -e "${GREEN}Direct download successful. SHA256: $DIRECT_SHA256${RESET}"
+            SHA256=$DIRECT_SHA256
+            download_success=true
+            
+            # Save a copy for debugging if needed
+            cp "$DIRECT_TARBALL" "/tmp/ducktape-$NEW_VERSION-github.tar.gz"
+            echo -e "${GREEN}Saved GitHub tarball to /tmp/ducktape-$NEW_VERSION-github.tar.gz${RESET}"
+        else
+            echo -e "${YELLOW}Warning: Downloaded file is empty. Retrying (attempt $((retry_count+1))/${MAX_RETRIES})...${RESET}"
+            rm -f "$DIRECT_TARBALL"
+            sleep 5
+        fi
+    else
+        echo -e "${YELLOW}Download failed. Retrying (attempt $((retry_count+1))/${MAX_RETRIES})...${RESET}"
+        sleep 5
+    fi
     
-    # Save a copy for debugging if needed
-    cp "$DIRECT_TARBALL" "/tmp/ducktape-$NEW_VERSION-github.tar.gz"
-    echo -e "${GREEN}Saved GitHub tarball to /tmp/ducktape-$NEW_VERSION-github.tar.gz${RESET}"
-else
-    echo -e "${RED}Failed to download from GitHub. Using locally generated SHA256${RESET}"
+    retry_count=$((retry_count+1))
+done
+
+if [[ $download_success == false ]]; then
+    echo -e "${RED}Failed to download from GitHub after ${MAX_RETRIES} attempts. Using locally generated SHA256${RESET}"
     SHA256=$GENERATED_SHA256
 fi
 
