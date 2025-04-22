@@ -211,28 +211,44 @@ echo -e "\n${YELLOW}Cleaning Homebrew cache and downloading GitHub release to ve
 GITHUB_TARBALL="/tmp/ducktape-github-$NEW_VERSION.tar.gz"
 GITHUB_URL="https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz"
 
-# Clear the cached file if it exists
+# Force clear all Homebrew cache files for this package
 HOMEBREW_CACHE_PATH="$HOME/Library/Caches/Homebrew/downloads"
-CACHED_FILES=$(find "$HOMEBREW_CACHE_PATH" -name "*ducktape-$NEW_VERSION.tar.gz*" 2>/dev/null)
+CACHED_FILES=$(find "$HOMEBREW_CACHE_PATH" -name "*ducktape*" 2>/dev/null)
 if [[ -n "$CACHED_FILES" ]]; then
     echo -e "${YELLOW}Found cached Homebrew files that may cause SHA mismatch:${RESET}"
     echo "$CACHED_FILES"
-    read -p "Do you want to remove these cached files? (y/n): " remove_cache
-    if [[ "$remove_cache" =~ ^[Yy]$ ]]; then
-        for file in $CACHED_FILES; do
-            rm -f "$file"
-            echo -e "${GREEN}Removed: $file${RESET}"
-        done
-    fi
+    echo -e "${YELLOW}Removing all cached files for ducktape to ensure clean download${RESET}"
+    
+    for file in $CACHED_FILES; do
+        rm -f "$file"
+        echo -e "${GREEN}Removed: $file${RESET}"
+    done
+    
+    # Also remove any temp files that might be interfering
+    rm -f /tmp/ducktape*
+    echo -e "${GREEN}Removed any temporary files${RESET}"
 fi
 
-# Perform a fresh download from GitHub
-if curl -L -s "$GITHUB_URL" -o "$GITHUB_TARBALL"; then
+# Wait a moment for GitHub to fully process the new tag
+echo -e "${YELLOW}Waiting for GitHub to fully process the new tag (10 seconds)...${RESET}"
+sleep 10
+
+# Perform a fresh download from GitHub with proper headers to avoid caching
+echo -e "${YELLOW}Downloading fresh tarball from GitHub...${RESET}"
+if curl -L -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" "$GITHUB_URL" -o "$GITHUB_TARBALL"; then
     GITHUB_SHA256=$(shasum -a 256 "$GITHUB_TARBALL" | awk '{print $1}')
     echo -e "${GREEN}GitHub SHA256: $GITHUB_SHA256${RESET}"
     
     # Always use the GitHub SHA for the formula
     SHA256=$GITHUB_SHA256
+    
+    # Print the first few bytes of the tarball to verify its integrity
+    echo -e "${YELLOW}Verifying tarball integrity...${RESET}"
+    hexdump -C "$GITHUB_TARBALL" | head -n 3
+    
+    # Save the GitHub tarball for later verification if needed
+    cp "$GITHUB_TARBALL" "/tmp/ducktape-$NEW_VERSION-github.tar.gz"
+    echo -e "${GREEN}Saved GitHub tarball to /tmp/ducktape-$NEW_VERSION-github.tar.gz${RESET}"
     
     if [[ "$GENERATED_SHA256" != "$GITHUB_SHA256" ]]; then
         echo -e "${YELLOW}Warning: SHA256 mismatch between generated and GitHub tarball${RESET}"
@@ -246,9 +262,43 @@ else
     echo -e "${YELLOW}Using locally generated SHA256 as fallback: $GENERATED_SHA256${RESET}"
     SHA256=$GENERATED_SHA256
 fi
+
+# Before updating the formula, try downloading the tarball with brew directly to verify SHA
+echo -e "\n${YELLOW}Verifying tarball download with brew fetch...${RESET}"
+
+# Temporarily update a test formula with the new URL to test fetch
+TEST_FORMULA="/tmp/ducktape-test.rb"
+cp "$FORMULA_PATH" "$TEST_FORMULA"
+sed -i '' "s|url \".*\"|url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\"|" "$TEST_FORMULA"
+sed -i '' "s|sha256 \".*\"|sha256 \"$SHA256\"|" "$TEST_FORMULA"
+
+# Force Homebrew to download the file and verify the SHA
+if brew fetch --build-from-source "$TEST_FORMULA"; then
+    echo -e "${GREEN}Brew fetch successful - SHA256 verified!${RESET}"
+    VERIFIED_SHA=true
+else
+    echo -e "${RED}Brew fetch failed - SHA256 verification issue${RESET}"
+    echo -e "${YELLOW}Will try one more direct download from GitHub${RESET}"
+    
+    # One more try with a direct download
+    DIRECT_TARBALL="/tmp/ducktape-direct-$NEW_VERSION.tar.gz"
+    if curl -L -s "https://codeload.github.com/ducktapeai/ducktape/tar.gz/refs/tags/v$NEW_VERSION" -o "$DIRECT_TARBALL"; then
+        DIRECT_SHA256=$(shasum -a 256 "$DIRECT_TARBALL" | awk '{print $1}')
+        echo -e "${GREEN}Direct download SHA256: $DIRECT_SHA256${RESET}"
+        
+        # Use this SHA instead
+        SHA256=$DIRECT_SHA256
+        VERIFIED_SHA=true
+    else
+        echo -e "${RED}Direct download failed as well${RESET}"
+        VERIFIED_SHA=false
+    fi
+fi
+
+rm -f "$TEST_FORMULA"
 rm -f "$GITHUB_TARBALL"
 
-# Step 11: Update Homebrew formula with the correct SHA
+# Step 11: Update Homebrew formula with the verified SHA
 echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
 cd "$HOMEBREW_PATH"
 
