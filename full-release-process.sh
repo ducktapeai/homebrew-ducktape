@@ -28,11 +28,13 @@ RESET='\033[0m'
 DUCKTAPE_PATH="/Users/shaunstuart/RustroverProjects/ducktape"
 HOMEBREW_PATH="/Users/shaunstuart/RustroverProjects/homebrew-ducktape"
 FORMULA_PATH="$HOMEBREW_PATH/Formula/ducktape.rb"
+CHANGELOG_PATH="$DUCKTAPE_PATH/CHANGELOG.md"
 
 # Default settings
 SKIP_TEST_CHECK=0
 SKIP_BUILD=0
 GH_WAIT_SECONDS=10
+CHANGELOG_TYPE="fixed"
 
 # Display help message
 show_help() {
@@ -47,13 +49,97 @@ Options:
   --skip-test-check    Continue even if tests fail (will still prompt for confirmation)
   --skip-build         Skip the build and test steps (use when Cargo is not available)
   --wait=SECONDS       Wait SECONDS seconds for GitHub to process tag (default: 10)
+  --type=TYPE          Changelog entry type: fixed, added, changed (default: fixed)
   --help, -h           Display this help message and exit
 
 Examples:
   ./full-release-process.sh 0.13.5 "Fixed input handling in notes module"
   ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --skip-build
   ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --wait=20
+  ./full-release-process.sh 0.13.5 "Added new calendar features" --type=added
 EOF
+}
+
+# Validate semantic version format
+validate_version() {
+    local version=$1
+    
+    # Check if version matches semantic versioning pattern
+    if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo -e "${RED}Error: Invalid version format. Must be in format: X.Y.Z${RESET}"
+        echo -e "${YELLOW}Examples: 0.1.0, 1.0.0, 2.3.4${RESET}"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Check for duplicate version in CHANGELOG
+check_duplicate_version() {
+    local version=$1
+    local count=$(grep -c "## \[$version\]" "$CHANGELOG_PATH")
+    
+    if [ "$count" -gt 0 ]; then
+        echo -e "${YELLOW}Warning: Version $version already exists in CHANGELOG.md${RESET}"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Update CHANGELOG.md with proper formatting
+update_changelog() {
+    local version=$1
+    local message=$2
+    local type=$3
+    local date=$4
+    local capitalized_type
+
+    # Capitalize first letter of type
+    capitalized_type="$(tr '[:lower:]' '[:upper:]' <<< ${type:0:1})${type:1}"
+    
+    # Create entry with proper formatting
+    local changelog_entry="## [$version] - $date\n### $capitalized_type\n- $message\n\n"
+    
+    # Add entry after the Unreleased section if it exists, otherwise at the top
+    if grep -q "## \[Unreleased\]" "$CHANGELOG_PATH"; then
+        # Find end of Unreleased section
+        unreleased_line=$(grep -n "## \[Unreleased\]" "$CHANGELOG_PATH" | cut -d ":" -f1)
+        next_version_line=$(($(grep -n "^## \[[0-9]" "$CHANGELOG_PATH" | head -n 1 | cut -d ":" -f1)))
+        
+        if [ "$next_version_line" -gt "$unreleased_line" ]; then
+            # Insert after Unreleased section
+            sed -i '' "${next_version_line}i\\
+$changelog_entry" "$CHANGELOG_PATH"
+        else
+            # Fallback to inserting at top
+            sed -i '' "1s/^/$changelog_entry/" "$CHANGELOG_PATH"
+        fi
+    else
+        # No Unreleased section, insert at top
+        sed -i '' "1s/^/$changelog_entry/" "$CHANGELOG_PATH"
+    fi
+    
+    # Update version links at bottom if they exist
+    if grep -q "\[unreleased\]: " "$CHANGELOG_PATH"; then
+        # Get previous version to update unreleased comparison link
+        prev_version=$(grep -E "^\[.*\]:" "$CHANGELOG_PATH" | grep -v "unreleased" | head -n 1 | sed -E 's/^\[(.*)\]:.*/\1/')
+        
+        # Update unreleased link to compare with new version
+        sed -i '' "s|\[unreleased\]: .*|[unreleased]: https://github.com/ducktapeai/ducktape/compare/v$version...HEAD|" "$CHANGELOG_PATH"
+        
+        # Add new version link
+        if [ -n "$prev_version" ]; then
+            new_link="[$version]: https://github.com/ducktapeai/ducktape/compare/v$prev_version...v$version"
+            sed -i '' "/\[unreleased\]: /a\\
+$new_link" "$CHANGELOG_PATH"
+        else
+            # If no previous version, just add this one
+            new_link="[$version]: https://github.com/ducktapeai/ducktape/releases/tag/v$version"
+            sed -i '' "/\[unreleased\]: /a\\
+$new_link" "$CHANGELOG_PATH"
+        fi
+    fi
 }
 
 # Process flags
@@ -71,6 +157,16 @@ for arg in "$@"; do
     # Check for --wait flag with a value
     if [[ "$arg" =~ ^--wait=[0-9]+$ ]]; then
         GH_WAIT_SECONDS="${arg#*=}"
+    fi
+    # Check for --type flag
+    if [[ "$arg" =~ ^--type=.+$ ]]; then
+        changelog_type="${arg#*=}"
+        # Validate changelog type
+        if ! [[ "$changelog_type" =~ ^(fixed|added|changed|deprecated|removed|security)$ ]]; then
+            echo -e "${RED}Error: Invalid changelog type. Must be one of: fixed, added, changed, deprecated, removed, security${RESET}"
+            exit 1
+        fi
+        CHANGELOG_TYPE="$changelog_type"
     fi
 done
 
@@ -90,6 +186,21 @@ RELEASE_TARBALL="$DUCKTAPE_PATH/../ducktape-$NEW_VERSION.tar.gz"
 echo -e "${BLUE}=======================================================${RESET}"
 echo -e "${BLUE}Ducktape Release Process - Version $NEW_VERSION${RESET}"
 echo -e "${BLUE}=======================================================${RESET}"
+
+# Validate version format
+if ! validate_version "$NEW_VERSION"; then
+    echo -e "${RED}Release process aborted due to invalid version format${RESET}"
+    exit 1
+fi
+
+# Check for duplicate version in CHANGELOG.md
+if ! check_duplicate_version "$NEW_VERSION"; then
+    read -p "Version $NEW_VERSION already exists in CHANGELOG.md. Continue anyway? (y/n): " continue_with_duplicate
+    if [[ ! "$continue_with_duplicate" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Release process aborted due to duplicate version${RESET}"
+        exit 1
+    fi
+fi
 
 # Check for required tools
 check_prerequisites() {
@@ -183,11 +294,11 @@ echo -e "\n${YELLOW}Updating version in Cargo.toml to $NEW_VERSION${RESET}"
 cd "$DUCKTAPE_PATH"
 sed -i '' "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
 
-# Step 5: Update CHANGELOG.md
+# Step 5: Update CHANGELOG.md with proper formatting
 echo -e "\n${YELLOW}Updating CHANGELOG.md${RESET}"
 cd "$DUCKTAPE_PATH"
-CHANGELOG_ENTRY="## [$NEW_VERSION] - $CURRENT_DATE\n### Fixed\n- $CHANGELOG_MESSAGE\n\n"
-sed -i '' "1s/^/$CHANGELOG_ENTRY/" CHANGELOG.md
+update_changelog "$NEW_VERSION" "$CHANGELOG_MESSAGE" "$CHANGELOG_TYPE" "$CURRENT_DATE"
+echo -e "${GREEN}CHANGELOG.md updated with $NEW_VERSION entry${RESET}"
 
 # Step 6: Build and test the project (conditionally)
 if [[ $SKIP_BUILD -eq 0 ]]; then
