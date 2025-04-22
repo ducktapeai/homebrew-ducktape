@@ -209,16 +209,32 @@ echo -e "${GREEN}SHA256: $SHA256${RESET}"
 # Step 11: Update Homebrew formula
 echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
 cd "$HOMEBREW_PATH"
-sed -i '' "s/url \".*\"/url \"https:\/\/github.com\/ducktapeai\/ducktape\/archive\/v$NEW_VERSION.tar.gz\"/" "$FORMULA_PATH"
-sed -i '' "s/version \".*\"/version \"$NEW_VERSION\"/" "$FORMULA_PATH"
-sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" "$FORMULA_PATH"
 
-# Step 12: Commit and push Homebrew formula changes
-echo -e "\n${YELLOW}Committing and pushing Homebrew formula changes...${RESET}"
-cd "$HOMEBREW_PATH"
-git add "$FORMULA_PATH"
-git commit -m "Update ducktape formula to version $NEW_VERSION"
-git push
+# Extract current values from the formula
+CURRENT_VERSION=$(grep -E 'version "[^"]+"' "$FORMULA_PATH" | sed 's/^.*version "\(.*\)".*$/\1/')
+CURRENT_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+
+# Only update if there are actual changes
+if [[ "$CURRENT_VERSION" != "$NEW_VERSION" || "$CURRENT_SHA" != "$SHA256" ]]; then
+    sed -i '' "s/url \".*\"/url \"https:\/\/github.com\/ducktapeai\/ducktape\/archive\/v$NEW_VERSION.tar.gz\"/" "$FORMULA_PATH"
+    sed -i '' "s/version \".*\"/version \"$NEW_VERSION\"/" "$FORMULA_PATH"
+    sed -i '' "s/sha256 \".*\"/sha256 \"$SHA256\"/" "$FORMULA_PATH"
+    
+    echo -e "${GREEN}Formula updated with new version and SHA${RESET}"
+    
+    # Step 12: Commit and push Homebrew formula changes
+    echo -e "\n${YELLOW}Committing and pushing Homebrew formula changes...${RESET}"
+    git add "$FORMULA_PATH"
+    if git diff --staged --quiet; then
+        echo -e "${YELLOW}No changes to commit. Formula is already up to date.${RESET}"
+    else
+        git commit -m "Update ducktape formula to version $NEW_VERSION"
+        git push
+        echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
+    fi
+else
+    echo -e "${YELLOW}Formula already has the correct version ($NEW_VERSION) and SHA. No updates needed.${RESET}"
+fi
 
 # Step 13: Verify the formula works
 echo -e "\n${YELLOW}Testing Homebrew formula with 'brew audit'...${RESET}"
