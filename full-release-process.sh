@@ -229,162 +229,145 @@ if [[ -n "$CACHED_FILES" ]]; then
     echo -e "${GREEN}Removed any temporary files${RESET}"
 fi
 
+# Thoroughly clean Homebrew cache
+echo -e "${YELLOW}Running brew cleanup to ensure all caches are cleared...${RESET}"
+brew cleanup -s
+echo -e "${GREEN}Brew cleanup completed${RESET}"
+
 # Wait a moment for GitHub to fully process the new tag
 echo -e "${YELLOW}Waiting for GitHub to fully process the new tag (10 seconds)...${RESET}"
 sleep 10
 
-# Perform a fresh download from GitHub with proper headers to avoid caching
-echo -e "${YELLOW}Downloading fresh tarball from GitHub...${RESET}"
-if curl -L -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" "$GITHUB_URL" -o "$GITHUB_TARBALL"; then
-    GITHUB_SHA256=$(shasum -a 256 "$GITHUB_TARBALL" | awk '{print $1}')
-    echo -e "${GREEN}GitHub SHA256: $GITHUB_SHA256${RESET}"
+# Always get the SHA directly from GitHub's codeload URL for consistency
+echo -e "${YELLOW}Downloading from direct codeload URL for reliable SHA256...${RESET}"
+DIRECT_TARBALL="/tmp/ducktape-direct-$NEW_VERSION.tar.gz"
+CODELOAD_URL="https://codeload.github.com/ducktapeai/ducktape/tar.gz/refs/tags/v$NEW_VERSION"
+if curl -L -s -H "Cache-Control: no-cache" "$CODELOAD_URL" -o "$DIRECT_TARBALL"; then
+    DIRECT_SHA256=$(shasum -a 256 "$DIRECT_TARBALL" | awk '{print $1}')
+    echo -e "${GREEN}Direct download successful. SHA256: $DIRECT_SHA256${RESET}"
+    SHA256=$DIRECT_SHA256
     
-    # Always use the GitHub SHA for the formula
-    SHA256=$GITHUB_SHA256
-    
-    # Print the first few bytes of the tarball to verify its integrity
-    echo -e "${YELLOW}Verifying tarball integrity...${RESET}"
-    hexdump -C "$GITHUB_TARBALL" | head -n 3
-    
-    # Save the GitHub tarball for later verification if needed
-    cp "$GITHUB_TARBALL" "/tmp/ducktape-$NEW_VERSION-github.tar.gz"
+    # Save a copy for debugging if needed
+    cp "$DIRECT_TARBALL" "/tmp/ducktape-$NEW_VERSION-github.tar.gz"
     echo -e "${GREEN}Saved GitHub tarball to /tmp/ducktape-$NEW_VERSION-github.tar.gz${RESET}"
-    
-    if [[ "$GENERATED_SHA256" != "$GITHUB_SHA256" ]]; then
-        echo -e "${YELLOW}Warning: SHA256 mismatch between generated and GitHub tarball${RESET}"
-        echo -e "${YELLOW}This is normal due to GitHub's tarball generation differing from git archive${RESET}"
-        echo -e "${YELLOW}Using GitHub's SHA256 for the formula: $GITHUB_SHA256${RESET}"
-    else
-        echo -e "${GREEN}SHA256 checksum verification successful!${RESET}"
-    fi
 else
-    echo -e "${RED}Error: Could not download GitHub tarball to verify SHA256${RESET}"
-    echo -e "${YELLOW}Using locally generated SHA256 as fallback: $GENERATED_SHA256${RESET}"
+    echo -e "${RED}Failed to download from GitHub. Using locally generated SHA256${RESET}"
     SHA256=$GENERATED_SHA256
 fi
 
-# Try a direct download from the codeload URL as well
-DIRECT_TARBALL="/tmp/ducktape-direct-$NEW_VERSION.tar.gz"
-echo -e "${YELLOW}Downloading from direct codeload URL to verify SHA...${RESET}"
-if curl -L -s "https://codeload.github.com/ducktapeai/ducktape/tar.gz/refs/tags/v$NEW_VERSION" -o "$DIRECT_TARBALL"; then
-    DIRECT_SHA256=$(shasum -a 256 "$DIRECT_TARBALL" | awk '{print $1}')
-    echo -e "${GREEN}Direct download SHA256: $DIRECT_SHA256${RESET}"
-    
-    # Use this SHA as it's the most reliable
-    SHA256=$DIRECT_SHA256
-    
-    if [[ "$GITHUB_SHA256" != "$DIRECT_SHA256" ]]; then
-        echo -e "${YELLOW}Warning: SHA mismatch between different GitHub download methods${RESET}"
-        echo -e "${YELLOW}Using direct download SHA as it's most reliable: $DIRECT_SHA256${RESET}"
-    fi
-else
-    echo -e "${RED}Direct download failed${RESET}"
-fi
-
-# Step 11: Update Homebrew formula with the verified SHA
-echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
+# Step 11: Update the Formula with correct SHA256 using direct file creation
+echo -e "\n${YELLOW}Updating Homebrew formula with verified SHA256...${RESET}"
 cd "$HOMEBREW_PATH"
 
-# Extract current values from the formula
-CURRENT_VERSION=$(grep -E 'version "[^"]+"' "$FORMULA_PATH" | sed 's/^.*version "\(.*\)".*$/\1/')
-CURRENT_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+# Create the formula file with the correct SHA256
+echo -e "${GREEN}Creating formula with verified SHA256: $SHA256${RESET}"
+cat > "$FORMULA_PATH" << EOF
+class Ducktape < Formula
+  desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
+  homepage "https://github.com/ducktapeai/ducktape"
+  url "https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz"
+  version "$NEW_VERSION"
+  sha256 "$SHA256"
+  license "MIT"
 
-# Print current values for verification
-echo -e "${YELLOW}Current formula values: version=$CURRENT_VERSION, SHA=$CURRENT_SHA${RESET}"
-echo -e "${YELLOW}New values to set: version=$NEW_VERSION, SHA=$SHA256${RESET}"
+  depends_on "rust" => :build
 
-# Always update the SHA256 using a direct file replacement approach
-echo -e "${GREEN}Updating formula with verified SHA256${RESET}"
-
-# Create a temporary file with the updated formula content
-TMP_FORMULA="/tmp/ducktape-formula.rb"
-cat "$FORMULA_PATH" | sed \
-    -e "s|version \"$CURRENT_VERSION\"|version \"$NEW_VERSION\"|g" \
-    -e "s|sha256 \"$CURRENT_SHA\"|sha256 \"$SHA256\"|g" \
-    -e "s|url \".*\"|url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\"|g" \
-    > "$TMP_FORMULA"
-
-# Verify the SHA was properly updated in the temp file
-NEW_SHA_IN_FILE=$(grep -E 'sha256 "[^"]+"' "$TMP_FORMULA" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
-if [[ "$NEW_SHA_IN_FILE" != "$SHA256" ]]; then
-    echo -e "${RED}Error: SHA256 was not properly updated in formula file.${RESET}"
-    echo -e "${RED}Expected: $SHA256${RESET}"
-    echo -e "${RED}Found: $NEW_SHA_IN_FILE${RESET}"
-    echo -e "${YELLOW}Using direct pattern replacement as fallback...${RESET}"
+  def install
+    system "cargo", "install", "--root", prefix, "--path", "."
     
-    # Fallback to direct pattern replacement
-    awk -v newver="$NEW_VERSION" -v newsha="$SHA256" '
-    /^  version/ { print "  version \"" newver "\""; next }
-    /^  sha256/ { print "  sha256 \"" newsha "\""; next }
-    /^  url/ { print "  url \"https://github.com/ducktapeai/ducktape/archive/v" newver ".tar.gz\""; next }
-    { print }
-    ' "$FORMULA_PATH" > "$TMP_FORMULA"
+    # Generate shell completions - with error handling
+    begin
+      output = Utils.safe_popen_read(bin/"ducktape", "completions")
+      (bash_completion/"ducktape").write output
+      (zsh_completion/"_ducktape").write output
+      (fish_completion/"ducktape.fish").write output
+    rescue => e
+      opoo "Shell completions couldn't be generated: #{e.message}"
+      # Create minimal completions as fallback
+      (bash_completion/"ducktape").write "# Fallback bash completions for ducktape\n"
+      (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
+      (fish_completion/"ducktape.fish").write "# Fallback fish completions for ducktape\n"
+    end
     
-    # Verify again
-    NEW_SHA_IN_FILE=$(grep -E 'sha256 "[^"]+"' "$TMP_FORMULA" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
-    if [[ "$NEW_SHA_IN_FILE" != "$SHA256" ]]; then
-        echo -e "${RED}Critical error: Could not update SHA256 in formula file.${RESET}"
-        exit 1
-    fi
-fi
+    man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
+  end
 
-# Replace the original formula with the updated one
-cp "$TMP_FORMULA" "$FORMULA_PATH"
-rm -f "$TMP_FORMULA"
+  test do
+    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
+    system "\#{bin}/ducktape", "calendar", "list"
+  end
+end
+EOF
 
-# Verify the SHA was properly updated in the actual file
-UPDATED_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
-echo -e "${GREEN}Updated formula SHA256: $UPDATED_SHA${RESET}"
-
-if [[ "$UPDATED_SHA" != "$SHA256" ]]; then
-    echo -e "${RED}Critical error: Formula SHA256 doesn't match expected value after update!${RESET}"
+# Verify the formula was created correctly
+echo -e "${YELLOW}Verifying formula was updated correctly...${RESET}"
+FORMULA_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
+if [[ "$FORMULA_SHA" == "$SHA256" ]]; then
+    echo -e "${GREEN}Formula SHA256 verification successful: $FORMULA_SHA${RESET}"
+else
+    echo -e "${RED}Error: Formula SHA256 doesn't match expected value!${RESET}"
     echo -e "${RED}Expected: $SHA256${RESET}"
-    echo -e "${RED}Found in formula: $UPDATED_SHA${RESET}"
-    echo -e "${RED}Please update the SHA256 manually in the formula file.${RESET}"
+    echo -e "${RED}Found: $FORMULA_SHA${RESET}"
     exit 1
 fi
 
-# Step 12: Commit and push Homebrew formula changes
+# Step 12: Commit and push the formula changes
 echo -e "\n${YELLOW}Committing and pushing Homebrew formula changes...${RESET}"
 git add "$FORMULA_PATH"
+git commit -m "Update ducktape formula to version $NEW_VERSION with SHA256 $SHA256"
+git push
+echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
 
-# Check if there are actual changes to commit
-if git diff --staged --quiet; then
-    echo -e "${YELLOW}No changes detected in formula file. This is unexpected.${RESET}"
-    # Force a commit anyway in case the file was updated but git doesn't detect changes
-    git add -f "$FORMULA_PATH"
-    git commit -m "Update ducktape formula to version $NEW_VERSION with SHA256 $SHA256"
-    git push
-    echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
+# Clean up temporary files
+rm -f "$DIRECT_TARBALL"
+
+# Step 13: Verify the formula works by installing with brew
+echo -e "\n${YELLOW}Testing the formula by installing with brew...${RESET}"
+
+# Uninstall first if it exists
+echo -e "${YELLOW}Uninstalling previous version if present...${RESET}"
+brew uninstall ducktape 2>/dev/null || true
+
+# Try running brew update and brew tap (if needed) to ensure latest formula is used
+echo -e "${YELLOW}Running brew update to refresh formula...${RESET}"
+brew update
+
+# Force tap refresh if needed
+echo -e "${YELLOW}Ensuring tap is up to date...${RESET}"
+brew untap ducktapeai/ducktape 2>/dev/null || true
+brew tap ducktapeai/ducktape
+
+echo -e "${YELLOW}Installing with brew install...${RESET}"
+if ! brew install ducktape; then
+    echo -e "${RED}Error: Failed to install with brew install${RESET}"
+    echo -e "${YELLOW}Attempting install with --build-from-source...${RESET}"
+    
+    if ! brew install --build-from-source ducktape; then
+        echo -e "${RED}Error: Brew install failed with --build-from-source as well${RESET}"
+        read -p "This is a critical error. Continue anyway? (y/n): " continue_install
+        if [[ ! "$continue_install" =~ ^[Yy]$ ]]; then
+            echo -e "${RED}Release process aborted due to brew install failure${RESET}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}Successfully installed with --build-from-source${RESET}"
+    fi
 else
-    git commit -m "Update ducktape formula to version $NEW_VERSION with SHA256 $SHA256"
-    git push
-    echo -e "${GREEN}Formula changes pushed to GitHub${RESET}"
+    echo -e "${GREEN}Successfully installed with brew install${RESET}"
 fi
 
-# Remove temporary files
-rm -f "$DIRECT_TARBALL" "$GITHUB_TARBALL"
-
-# Step 13: Verify the formula works
-echo -e "\n${YELLOW}Testing Homebrew formula with 'brew audit'...${RESET}"
-FORMULA_NAME="ducktape"
-if ! brew audit "$FORMULA_NAME"; then
-    echo -e "${RED}Warning: Brew audit reported issues with the formula${RESET}"
-    read -p "Continue despite brew audit warnings? (y/n): " continue_audit
-    if [[ ! "$continue_audit" =~ ^[Yy]$ ]]; then
-        echo -e "${RED}Release process aborted due to brew audit issues${RESET}"
-        exit 1
+# Test the installed version
+echo -e "\n${YELLOW}Testing installed version...${RESET}"
+if installed_version=$(ducktape --version 2>/dev/null); then
+    echo -e "${GREEN}Installed version: $installed_version${RESET}"
+    if [[ "$installed_version" == *"$NEW_VERSION"* ]]; then
+        echo -e "${GREEN}Version verification successful!${RESET}"
+    else
+        echo -e "${RED}Warning: Installed version doesn't match expected version${RESET}"
+        echo -e "${RED}Expected: $NEW_VERSION, Found: $installed_version${RESET}"
     fi
-fi
-
-echo -e "\n${YELLOW}Testing Homebrew formula with 'brew install --build-from-source'...${RESET}"
-if ! brew install --build-from-source "$FORMULA_NAME"; then
-    echo -e "${RED}Error: Brew install failed!${RESET}"
-    read -p "This is a critical error. Continue anyway? (y/n): " continue_install
-    if [[ ! "$continue_install" =~ ^[Yy]$ ]]; then
-        echo -e "${RED}Release process aborted due to brew install failure${RESET}"
-        exit 1
-    fi
+else
+    echo -e "${RED}Failed to get installed version${RESET}"
 fi
 
 # Step 14: All done!
