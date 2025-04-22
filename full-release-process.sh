@@ -33,6 +33,26 @@ FORMULA_PATH="$HOMEBREW_PATH/Formula/ducktape.rb"
 SKIP_TEST_CHECK=0
 SKIP_BUILD=0
 
+# Display help message
+show_help() {
+    cat << EOF
+Usage: ./full-release-process.sh <version> "<changelog message>" [OPTIONS]
+
+Arguments:
+  <version>            The new version number (e.g., 0.13.5)
+  "<changelog message>" A message describing the changes in this release
+
+Options:
+  --skip-test-check    Continue even if tests fail (will still prompt for confirmation)
+  --skip-build         Skip the build and test steps (use when Cargo is not available)
+  --help               Display this help message and exit
+
+Examples:
+  ./full-release-process.sh 0.13.5 "Fixed input handling in notes module"
+  ./full-release-process.sh 0.13.5 "Fixed input handling in notes module" --skip-build
+EOF
+}
+
 # Process flags
 for arg in "$@"; do
     if [[ "$arg" == "--skip-test-check" ]]; then
@@ -41,16 +61,17 @@ for arg in "$@"; do
     if [[ "$arg" == "--skip-build" ]]; then
         SKIP_BUILD=1
     fi
+    if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+        show_help
+        exit 0
+    fi
 done
 
 # Validate arguments
 if [[ "$#" -lt 2 ]]; then
     echo -e "${RED}Error: Insufficient arguments${RESET}"
-    echo "Usage: ./full-release-process.sh <version> \"<changelog message>\" [--skip-test-check] [--skip-build]"
-    echo "Example: ./full-release-process.sh 0.13.5 \"Fixed input handling in notes module\""
-    echo "Options:"
-    echo "  --skip-test-check    Continue even if tests fail (will still prompt for confirmation)"
-    echo "  --skip-build         Skip the build and test steps (use when Cargo is not available)"
+    echo "Usage: ./full-release-process.sh <version> \"<changelog message>\" [OPTIONS]"
+    echo "For more information, run: ./full-release-process.sh --help"
     exit 1
 fi
 
@@ -79,7 +100,8 @@ check_prerequisites() {
     if [[ $SKIP_BUILD -eq 0 ]]; then
         if ! command -v cargo &> /dev/null; then
             echo -e "${RED}Error: cargo is not installed or not in PATH${RESET}"
-            echo -e "${YELLOW}You can use --skip-build flag to skip build and test steps${RESET}"
+            echo -e "${RED}Please install Rust/Cargo or rerun with the --skip-build flag:${RESET}"
+            echo -e "${YELLOW}    ./full-release-process.sh $1 \"$2\" --skip-build${RESET}"
             exit 1
         else
             echo -e "${GREEN}Cargo: OK${RESET}"
@@ -107,8 +129,8 @@ check_prerequisites() {
     echo -e "${GREEN}All required tools are available${RESET}"
 }
 
-# Run prerequisite check
-check_prerequisites
+# Run prerequisite check - pass arguments for better error messages
+check_prerequisites "$NEW_VERSION" "$CHANGELOG_MESSAGE"
 
 # Step 1: Check that we're on main branch in both repositories
 echo -e "\n${YELLOW}Checking git branch status...${RESET}"
