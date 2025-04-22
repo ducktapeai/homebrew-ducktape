@@ -198,7 +198,7 @@ else
 fi
 rm -f /tmp/git_push_error
 
-# Step 10: Create a tarball
+# Step 10: Create a tarball and verify SHA256 with GitHub
 echo -e "\n${YELLOW}Creating release tarball...${RESET}"
 cd "$DUCKTAPE_PATH"
 git archive --format=tar.gz --prefix="ducktape-$NEW_VERSION/" "v$NEW_VERSION" > "$RELEASE_TARBALL"
@@ -206,32 +206,49 @@ GENERATED_SHA256=$(shasum -a 256 "$RELEASE_TARBALL" | awk '{print $1}')
 echo -e "${GREEN}Tarball created: $RELEASE_TARBALL${RESET}"
 echo -e "${GREEN}Generated SHA256: $GENERATED_SHA256${RESET}"
 
-# Optionally download the GitHub release tarball to get the actual SHA256
-echo -e "\n${YELLOW}Downloading GitHub release to verify SHA256...${RESET}"
+# Clean homebrew cache and download the GitHub release to ensure we get the real SHA256
+echo -e "\n${YELLOW}Cleaning Homebrew cache and downloading GitHub release to verify SHA256...${RESET}"
 GITHUB_TARBALL="/tmp/ducktape-github-$NEW_VERSION.tar.gz"
 GITHUB_URL="https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz"
+
+# Clear the cached file if it exists
+HOMEBREW_CACHE_PATH="$HOME/Library/Caches/Homebrew/downloads"
+CACHED_FILES=$(find "$HOMEBREW_CACHE_PATH" -name "*ducktape-$NEW_VERSION.tar.gz*" 2>/dev/null)
+if [[ -n "$CACHED_FILES" ]]; then
+    echo -e "${YELLOW}Found cached Homebrew files that may cause SHA mismatch:${RESET}"
+    echo "$CACHED_FILES"
+    read -p "Do you want to remove these cached files? (y/n): " remove_cache
+    if [[ "$remove_cache" =~ ^[Yy]$ ]]; then
+        for file in $CACHED_FILES; do
+            rm -f "$file"
+            echo -e "${GREEN}Removed: $file${RESET}"
+        done
+    fi
+fi
+
+# Perform a fresh download from GitHub
 if curl -L -s "$GITHUB_URL" -o "$GITHUB_TARBALL"; then
     GITHUB_SHA256=$(shasum -a 256 "$GITHUB_TARBALL" | awk '{print $1}')
     echo -e "${GREEN}GitHub SHA256: $GITHUB_SHA256${RESET}"
     
-    # Use the GitHub hash instead of our local one for the formula
+    # Always use the GitHub SHA for the formula
     SHA256=$GITHUB_SHA256
     
     if [[ "$GENERATED_SHA256" != "$GITHUB_SHA256" ]]; then
         echo -e "${YELLOW}Warning: SHA256 mismatch between generated and GitHub tarball${RESET}"
-        echo -e "${YELLOW}This might be due to GitHub's tarball generation differing from git archive${RESET}"
-        echo -e "${YELLOW}Using GitHub's SHA256 for the formula${RESET}"
+        echo -e "${YELLOW}This is normal due to GitHub's tarball generation differing from git archive${RESET}"
+        echo -e "${YELLOW}Using GitHub's SHA256 for the formula: $GITHUB_SHA256${RESET}"
     else
         echo -e "${GREEN}SHA256 checksum verification successful!${RESET}"
     fi
 else
-    echo -e "${YELLOW}Warning: Could not download GitHub tarball to verify SHA256${RESET}"
-    echo -e "${YELLOW}Using locally generated SHA256: $GENERATED_SHA256${RESET}"
+    echo -e "${RED}Error: Could not download GitHub tarball to verify SHA256${RESET}"
+    echo -e "${YELLOW}Using locally generated SHA256 as fallback: $GENERATED_SHA256${RESET}"
     SHA256=$GENERATED_SHA256
 fi
 rm -f "$GITHUB_TARBALL"
 
-# Step 11: Update Homebrew formula
+# Step 11: Update Homebrew formula with the correct SHA
 echo -e "\n${YELLOW}Updating Homebrew formula...${RESET}"
 cd "$HOMEBREW_PATH"
 
@@ -239,8 +256,13 @@ cd "$HOMEBREW_PATH"
 CURRENT_VERSION=$(grep -E 'version "[^"]+"' "$FORMULA_PATH" | sed 's/^.*version "\(.*\)".*$/\1/')
 CURRENT_SHA=$(grep -E 'sha256 "[^"]+"' "$FORMULA_PATH" | sed 's/^.*sha256 "\(.*\)".*$/\1/')
 
+# Print current values for verification
+echo -e "${YELLOW}Current formula values: version=$CURRENT_VERSION, SHA=$CURRENT_SHA${RESET}"
+echo -e "${YELLOW}New values to set: version=$NEW_VERSION, SHA=$SHA256${RESET}"
+
 # Only update if there are actual changes
 if [[ "$CURRENT_VERSION" != "$NEW_VERSION" || "$CURRENT_SHA" != "$SHA256" ]]; then
+    # Use different delimiters to avoid URL path issues
     sed -i '' "s|url \".*\"|url \"https://github.com/ducktapeai/ducktape/archive/v$NEW_VERSION.tar.gz\"|" "$FORMULA_PATH"
     sed -i '' "s|version \".*\"|version \"$NEW_VERSION\"|" "$FORMULA_PATH"
     sed -i '' "s|sha256 \".*\"|sha256 \"$SHA256\"|" "$FORMULA_PATH"
