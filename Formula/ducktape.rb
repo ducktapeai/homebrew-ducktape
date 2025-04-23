@@ -5,6 +5,10 @@ class Ducktape < Formula
   version "0.13.7"
   sha256 "828efb708c29441141099fbb8094adf9ac244d9f80a2823967639717b300fb8f"
   license "MIT"
+  
+  head do
+    url "https://github.com/ducktapeai/ducktape.git", branch: "main"
+  end
 
   depends_on "rust" => :build
 
@@ -18,7 +22,7 @@ class Ducktape < Formula
       (zsh_completion/"_ducktape").write output
       (fish_completion/"ducktape.fish").write output
     rescue => e
-      opoo "Shell completions couldn't be generated: \#{e.message}"
+      opoo "Shell completions couldn't be generated: #{e.message}"
       # Create minimal completions as fallback
       (bash_completion/"ducktape").write "# Fallback bash completions for ducktape\n"
       (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
@@ -29,7 +33,7 @@ class Ducktape < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
-    system "\#{bin}/ducktape", "calendar", "list"
+    assert_match version.to_s, shell_output("#{bin}/ducktape --version")
+    system "#{bin}/ducktape", "calendar", "list"
   end
 end
