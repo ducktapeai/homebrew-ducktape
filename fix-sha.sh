@@ -10,7 +10,7 @@ YELLOW='\033[0;33m'
 RESET='\033[0m'
 
 # Configuration
-VERSION="0.13.5"
+VERSION="0.15.1"
 FORMULA_PATH="Formula/ducktape.rb"
 GITHUB_URL="https://codeload.github.com/ducktapeai/ducktape/tar.gz/refs/tags/v$VERSION"
 GITHUB_TARBALL="/tmp/ducktape-github-$VERSION.tar.gz"
