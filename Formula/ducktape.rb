@@ -3,11 +3,11 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/v0.14.0.tar.gz"
   version "0.14.0"
-  sha256 "7ee9e69c43ecd08ac575c962a443b069ada7f7507b3521b0cb9349ef7d5d223f"
+  sha256 "45436a7bab41921e3f5ad1b0464b830c3fda32e8a0fb38dc8c5705e092cc8dc2"
   license "MIT"
   
   head do
-    url "https://github.com/ducktapeai/ducktape.git", branch: "main"
+    url "https://github.com/ducktapeai/ducktape/archive/v0.14.0.tar.gz"
   end
 
   depends_on "rust" => :build
