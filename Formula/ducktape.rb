@@ -3,7 +3,7 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/v0.15.2.tar.gz"
   version "0.15.2"
-  sha256 "c39fb54c2af801365d30a9e4d2ecd578ebb6a8fd068a09d4973daae4692e688c"
+  sha256 "549c05c19d0b6193a79c6e653cc91d44edfb28f8e756e389ec0e52ddbe995875"
   license "MIT"
 
   depends_on "rust" => :build
@@ -29,7 +29,7 @@ class Ducktape < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("\#{bin}/ducktape --version")
-    system "\#{bin}/ducktape", "calendar", "list"
+    assert_match version.to_s, shell_output("#{bin}/ducktape --version")
+    system "#{bin}/ducktape", "calendar", "list"
   end
 end
