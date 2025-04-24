@@ -7,7 +7,7 @@ class Ducktape < Formula
   license "MIT"
   
   head do
-    url "https://github.com/ducktapeai/ducktape/archive/v0.14.1.tar.gz"
+    url "https://github.com/ducktapeai/ducktape.git", branch: "main"
   end
 
   depends_on "rust" => :build
