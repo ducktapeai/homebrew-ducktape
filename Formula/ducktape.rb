@@ -3,7 +3,7 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/v0.16.3.tar.gz"
   version "0.16.3"
-  sha256 "bc176205a52dbdf8d4e32e5124c86dd600761d2b10843943aae03d01e1e1eaf5"
+  sha256 "f6e7e8d13bb48af6889f6c4b1c1cba33b4bcca066da52eb5cc195d62e60cf759"
   license "MIT"
 
   depends_on "rust" => :build
