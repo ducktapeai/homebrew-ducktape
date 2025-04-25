@@ -3,14 +3,14 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/v0.15.5.tar.gz"
   version "0.15.5"
-  sha256 "0c6f442188c5b70bdfe5158311837acb4f606459c8a3605617c4a1df8e3f63f5"
+  sha256 "f79e215d8b5acdc73fbe67a4b33415226b81410a40ea6b64e5efaf342717275c"
   license "MIT"
 
   depends_on "rust" => :build
 
   def install
     system "cargo", "install", "--root", prefix, "--path", "."
-    
+
     # Generate shell completions - with error handling
     begin
       output = Utils.safe_popen_read(bin/"ducktape", "completions")
@@ -24,7 +24,7 @@ class Ducktape < Formula
       (zsh_completion/"_ducktape").write "# Fallback zsh completions for ducktape\n"
       (fish_completion/"ducktape.fish").write "# Fallback fish completions for ducktape\n"
     end
-    
+
     man1.install "man/ducktape.1" if File.exist?("man/ducktape.1")
   end
 
