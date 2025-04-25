@@ -1,0 +1,30 @@
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "no safe upgrade available for paste" },
+    { id = "RUSTSEC-2025-0021", reason = "SHA-1 collision in gix-features - dependency constraints prevent upgrade, planned for next major release" }
+]
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "OpenSSL"
+]
+private = { ignore = true }
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,67 @@
+[package]
+name = "ducktape"
+version = "0.16.5"
+edition = "2021"
+authors = ["DuckTapeAI"]
+description = "A terminal-based calendar management tool with natural language processing and AI integration"
+license = "MIT"
+repository = "https://github.com/DuckTapeAI/ducktape"
+documentation = "https://github.com/DuckTapeAI/ducktape#readme"
+keywords = ["calendar", "ai", "cli", "productivity", "natural-language"]
+categories = ["command-line-utilities", "date-and-time"]
+readme = "README.md"
+default-run = "ducktape"
+
+[dependencies]
+rustyline = "11.0.0"
+walkdir = "2.3.3"
+ical = "0.8.0"
+csv = "1.3.0"
+chrono = { version = "0.4.26", features = ["serde"] }
+anyhow = "1.0.72"
+colored = "2.0.4"
+log = "0.4"
+env_logger = "0.10"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+reqwest = { version = "0.12.0", features = ["json"] }
+tokio = { version = "1.35.0", features = ["full"] }
+lru = "0.10"
+once_cell = "1.8"
+regex = "1.9"
+directories = "5.0"
+toml = "0.8"
+chrono-tz = "0.8.6"
+scopeguard = "1.2.0"
+axum = { version = "0.7.2", features = ["ws"] }
+tower-http = { version = "0.5.0", features = ["cors"] }
+futures = "0.3.28"
+uuid = { version = "1.6.0", features = ["v4"] }
+async-trait = "0.1.74"
+dotenvy = "0.15"
+clap = { version = "4.4.18", features = ["derive"] }
+
+# Zoom API Integration
+oauth2 = "4.4.2"
+jwt = "0.16.0"
+hmac = "0.12.1"
+sha2 = "0.10.7"
+url = "2.4.1"
+base64 = "0.21.4"
+tokio-rustls = "0.26.0"
+secrecy = "0.8.0"
+shell-words = "1.1.0"
+
+[dev-dependencies]
+pretty_assertions = "1.3"
+test-case = "3.1"
+tempfile = "3.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+cargo-audit = "0.21.2"
+cargo-udeps = "0.1.40"
+
+[[bench]]
+name = "benchmark"
+harness = false
