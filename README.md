@@ -1,43 +1,91 @@
-# Homebrew Tap for Ducktape
+# Homebrew Tap for DuckTape
 
-This is the official Homebrew tap for Ducktape, an AI-powered terminal tool for Apple Calendar, Reminders and Notes.
+This is the official Homebrew tap for DuckTape, an AI-powered terminal tool for Apple Calendar, Reminders, and Notes.
 
-## Available Formulas
+## Installation
 
-This tap contains two formulas for different use cases:
+Install DuckTape via Homebrew with a single command:
 
-### Standard Formula (Public Release)
+```bash
+brew install ducktapeai/ducktape/ducktape
+```
 
-For standard installation once the repository is public:
+Or, you can add the tap first and then install:
 
 ```bash
 # Add the tap
 brew tap ducktapeai/ducktape
 
-# Install Ducktape
+# Install DuckTape
 brew install ducktape
 ```
 
-### Development Formula (Private Development)
+## Updating DuckTape
 
-For local development or private repository access:
+To update to the latest version:
 
 ```bash
-# Add the tap
-brew tap ducktapeai/ducktape
-
-# Install development version of Ducktape
-brew install --HEAD ducktapeai/ducktape/ducktape-dev
+brew upgrade ducktapeai/ducktape/ducktape
 ```
+
+## System Requirements
+
+- **macOS**: DuckTape only works on macOS
+- **Apple Calendar, Reminders, and Notes**: These apps should be properly configured
+- **Rust**: Installed automatically as a build dependency
+
+## Post-Installation Setup
+
+After installation, you'll need to:
+
+1. **Set up API Keys**: For AI functionality, export an API key for your preferred provider:
+   ```bash
+   # Choose one:
+   export OPENAI_API_KEY='your-openai-api-key-here'
+   export XAI_API_KEY='your-xai-api-key-here'
+   export DEEPSEEK_API_KEY='your-deepseek-api-key-here'
+   ```
+
+2. **Configure DuckTape**: Run DuckTape once to generate the default configuration:
+   ```bash
+   ducktape
+   ```
+
+## Troubleshooting
+
+If you encounter issues during installation:
+
+- Make sure you're running on macOS
+- Verify your internet connection
+- Ensure you have sufficient permissions
+- Try running `brew doctor` to check for any Homebrew issues
+- For issues with the formula, please [open an issue](https://github.com/ducktapeai/ducktape/issues)
 
 ## Usage
 
-After installation, you can run the `ducktape` command in your terminal. For more information, see the [main Ducktape repository](https://github.com/DuckTapeAI/ducktape).
+After installation, you can run DuckTape in three ways:
+
+1. **Interactive Hybrid Mode**: 
+   ```bash
+   ducktape
+   ```
+
+2. **Direct CLI Commands**:
+   ```bash
+   ducktape calendar list
+   ```
+
+3. **Natural Language via AI Subcommand**:
+   ```bash
+   ducktape ai "schedule a meeting tomorrow at 10am"
+   ```
+
+For more information, see the [main DuckTape repository](https://github.com/ducktapeai/ducktape) or [documentation](https://ducktapeai.com/docs/).
 
 ## Versioning
 
-Ducktape follows semantic versioning. The current version is specified in each formula file.
+DuckTape follows semantic versioning. The current version is specified in the formula file.
 
 ## Contributing
 
-Contributions are welcome! Please follow the guidelines in the [CONTRIBUTING.md](https://github.com/DuckTapeAI/ducktape/blob/main/CONTRIBUTING.md) file of the main repository.
+Contributions are welcome! Please follow the guidelines in the [CONTRIBUTING.md](https://github.com/ducktapeai/ducktape/blob/main/CONTRIBUTING.md) file of the main repository.
