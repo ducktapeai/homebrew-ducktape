@@ -1,8 +1,5 @@
 .DS_Store
-ducktape-0.16.3.tar.gz
-ducktape-0.16.6.tar.gz
+# Exclude all tarball files
+*.tar.gz
+# Keep .gitignore
 .gitignore
-.gitignore
-ducktape-0.16.13.tar.gz
-ducktape-0.16.14-new.tar.gz
-ducktape-0.16.18.tar.gz
