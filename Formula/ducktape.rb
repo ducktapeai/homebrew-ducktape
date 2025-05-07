@@ -1,9 +1,9 @@
 class Ducktape < Formula
   desc "AI-powered terminal tool for Apple Calendar, Reminders and Notes"
   homepage "https://github.com/ducktapeai/ducktape"
-  url "https://github.com/ducktapeai/ducktape/archive/v0.16.15.tar.gz"
-  version "0.16.15"
-  sha256 "bc9cce569bb1df4add702c30273b10c9e4c465fa560fd5a52cca33ec885fd5f6"
+  url "https://github.com/ducktapeai/ducktape/archive/v0.16.16.tar.gz"
+  version "0.16.16"
+  sha256 "0e6f71f08e30cbcb7280551de2f625a672e0c40179db0e016f23222a12d3ae59"
   license "MIT"
   
   # Explicitly mark as macOS only
