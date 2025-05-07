@@ -3,7 +3,7 @@ class Ducktape < Formula
   homepage "https://github.com/ducktapeai/ducktape"
   url "https://github.com/ducktapeai/ducktape/archive/v0.16.16.tar.gz"
   version "0.16.16"
-  sha256 "0e6f71f08e30cbcb7280551de2f625a672e0c40179db0e016f23222a12d3ae59"
+  sha256 "925aaa3266976796c4f6e6e53740ace2d003413dd652f519cc97aefd7fa7d8de"
   license "MIT"
   
   # Explicitly mark as macOS only
